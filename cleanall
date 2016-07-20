@@ -1,0 +1,22 @@
+#!/bin/bash
+
+mydir=`dirname $0`
+cd $mydir
+mydir=`pwd -P` # make the path absolute rather than relative
+
+cd ../WRFV3
+./clean -a
+
+cd ../WPS
+./clean
+
+# currently only the version 4 NEI gridding code has a Makefile
+cd ../NEI/src/v04
+make clean
+
+cd ../../../MEGAN/src/
+rm megan_bio_emiss
+make clean
+
+cd ../../MOZBC/src
+make clean

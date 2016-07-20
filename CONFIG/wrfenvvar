@@ -1,0 +1,122 @@
+#!/bin/bash
+#
+# Check that WRF-Chem appropriate environmental variables are
+# set.
+# The values will be placed in the envvar_wrfchem.cfg file in the
+# directory one level up from this to be sourced by other scripts as
+# necessary.
+#
+# First see if any of the core environmental variables are set
+
+if [ "$1" == "--override" ]; then
+    override=true
+else
+    override=false
+fi
+
+outfile="$(dirname $0)/../envvar_wrfchem.cfg"
+rm -f $outfile
+
+
+if ! $override; then
+    doexit=false
+    if [ ! -z $EM_CORE -a $EM_CORE -ne 1 ]; then
+        echo "EM_CORE should be set to 1 for WRF-Chem"
+        doexit=true
+    fi
+    if [ ! -z $NMM_CORE -a $NMM_CORE -ne 0 ]; then
+        echo "NMM_CORE should be set to 0 for WRF-Chem"
+        doexit=true
+    fi
+    if [ ! -z $WRF_EM_CORE -a $WRF_EM_CORE -ne 1 ]; then
+        echo "WRF_EM_CORE should be set to 1 for WRF-Chem"
+        doexit=true
+    fi
+    if [ ! -z $WRF_NMM_CORE -a $WRF_NMM_CORE -ne 0 ]; then
+        echo "WRF_NMM_CORE should be set to 0 for WRF-Chem"
+        doexit=true
+    fi
+    if [ ! -z $WRF_CHEM -a $WRF_CHEM -ne 1 ]; then
+        echo "WRF_CHEM must be set to 1 to compile WRF-Chem"
+        doexit=true
+    fi
+
+    if $doexit; then
+        echo ""
+        echo "**************************************************************************************"
+        echo "One or more environmental variables for WRF-Chem have been detected as set improperly."
+        echo "Unset them, or run buildwrfchem with both the 'config' and 'override' options to"
+        echo "force all environmental variables to be set correctly."
+        echo "**************************************************************************************"
+        echo ""
+        
+        exit 1
+    else
+        echo "export EM_CORE=$EM_CORE" >> $outfile
+        echo "export WRF_EM_CORE=$WRF_EM_CORE" >> $outfile
+        echo "export NMM_CORE=$NMM_CORE" >> $outfile
+        echo "export WRF_NMM_CORE=$WRF_NMM_CORE" >> $outfile
+        echo "export WRF_CHEM=$WRF_CHEM" >> $outfile
+    fi
+else
+    echo "export EM_CORE=1" >> $outfile
+    echo "export WRF_EM_CORE=1" >> $outfile
+    echo "export NMM_CORE=0" >> $outfile
+    echo "export WRF_NMM_CORE=0" >> $outfile
+    echo "export WRF_CHEM=1" >> $outfile
+fi
+
+if [ ! -z "$WRF_KPP" ]; then
+    if [ "$WRF_KPP" -eq 1 ]; then
+        usekpp=true
+    else
+        usekpp=false
+    fi
+else
+    echo -n "Use KPP (kinetic preprocessor)? Default is Y. [y/n]: "
+    read userans
+    if [ "$userans" == "n" -o "userans" == "N" ]; then
+        echo "Not using KPP"
+        usekpp=false
+    else
+        echo "Using KPP"
+        usekpp=true
+    fi
+fi
+
+if $usekpp; then
+    # Directories to look for libfl.a in, separated by spaces
+    libdirs="/usr/lib64 /usr/lib/ $WRF_KPP_LIBS"
+
+    echo "export WRF_KPP=1" >> $outfile
+    if [ -z $YACC ]; then
+        yaccloc=$(which yacc)
+        echo "export YACC=\"$yaccloc -d\"" >> $outfile
+    fi
+    if [ -z $FLEX_LIB_DIR ]; then
+        for p in $libdirs; do
+            flexloc=$(find $p -name libfl.a)
+            if [ ! -z $flexloc ]; then
+                flexloc=$(dirname $flexloc)
+                echo "export FLEX_LIB_DIR=$flexloc" >> $outfile
+                break
+            fi
+        done
+    fi
+
+    doexit=false
+    # Check if any of the environmental variables failed to set
+    if [ -z $yaccloc ]; then
+        echo "Could not find an executable for YACC on your search path. Set env. var. YACC manually if needed."
+        doexit=true
+    fi
+    if [ -z $flexloc ]; then
+        echo "Could not find libfl.a in any of: $libdirs. Can add additional search paths (separated by spaces) as the env. var. WRF_KPP_LIBS."
+        doexit=true
+    fi
+
+    if $doexit; then
+        echo "One or more KPP variables could not be set (see previous messages). Configuration aborted."
+        exit 1
+    fi 
+fi  

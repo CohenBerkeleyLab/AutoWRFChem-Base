@@ -1,0 +1,136 @@
+#!/bin/bash
+# This will compile all the necessary utilities to run WRF-Chem and
+# prepare its input.
+
+mydir=`dirname $0`
+cd $mydir
+mydir=`pwd -P`
+
+# Make sure the folder for the compilation logs exists
+if [ ! -d "$mydir/COMPLOGS" ]; then
+    mkdir "$mydir/COMPLOGS"
+fi
+
+# Also make sure to source the environmental variables
+. "$mydir/envvar_wrfchem.cfg"
+
+# The exit status needs to reflect which compilations succeeded
+# start as 111111 (= 63) and remove the corresponding bit as each
+# one succeeds
+exitstat=63
+
+# First WRF-Chem
+cd ../WRFV3
+wrfcomp=false
+echo ""
+echo "Compiling WRF-Chem..."
+if [ ! -f configure.wrf ]; then
+    echo "  ERROR: configure.wrf is not present; cannot compile WRF."
+    echo "  Run 'autowrfchem config' to produce the necessary file."
+    echo "  Remember, the clean command removes the configure.wrf file."
+else
+    ./compile em_real >& "$mydir/COMPLOGS/compile_wrf.log"
+    wrfexit=$?
+    if [ $wrfexit -eq 0 ]; then
+        wrfcomp=true
+        exitstat=$((exitstat - 1))
+    fi
+fi
+
+# Next WPS. Only compile if WRF successfully did.
+cd ../WPS
+echo ""
+echo "Compiling WPS..."
+if $wrfcomp; then
+    if [ ! -f configure.wps ]; then
+        echo "ERROR: configure.wps is not present; cannot compile WPS."
+        echo "Run 'autowrfchem config' to produce the necessary file."
+        echo "Remember, the clean command removes the configure.wps file."
+    else
+        ./compile >& "$mydir/COMPLOGS/compile_wps.log" 
+        wpsexit=$?
+        if [ $wpsexit -eq 0 ]; then
+            # WPS has 3 pieces so double check that all of them were created
+            wpssecc=true
+            if [ ! -f geogrid.exe ]; then
+                echo "geogrid did not compile"
+                wpssecc=false
+            fi
+            if [ ! -f ungrib.exe ]; then
+                echo "ungrib did not compile"
+                wpssecc=false
+            fi
+            if [ ! -f metgrid.exe ]; then
+                echo "metgrid did not compile"
+                wpssecc=false
+            fi
+
+            if $wpssucc; then
+                exitstat=$((exitstat - 2))
+            fi
+        fi
+    fi
+else
+    echo "  Cannot compile WPS if WRF did not compile. Skipping for"
+    echo "  now. Check the compile logs in BUILD/COMPLOGS to see"
+    echo "  why WRF failed to build and correct that issue before"
+    echo "  rerunning 'autowrfchem compile'"
+fi
+
+# Compile the convert_emiss.exe program
+cd ../WRFV3
+echo ""
+echo "Compiling convert_emiss.exe..."
+if $wrfcomp; then
+    if [ ! -f configure.wrf ]; then
+        echo "  ERROR: configure.wrf is not present; cannot compile WRF."
+        echo "  Run 'autowrfchem config' to produce the necessary file."
+        echo "  Remember, the clean command removes the configure.wrf file."
+    else
+        ./compile emi_conv >& "$mydir/COMPLOGS/compile_emi-conv.log"
+        convexit=$?
+        if [ $convexit -eq 0 ]; then
+            exitstat=$((exitstat - 4 ))
+            cd run
+            ln -sf ../chem/convert_emiss.exe
+            cd ..
+        fi
+    fi
+else
+    echo "  Cannot compile convert_emiss if WRF did not compile."
+    echo "  Skipping for now. Check the compile logs in BUILD/COMPLOGS"
+    echo "  to see why WRF failed to build and correct that issue before"
+    echo "  rerunning 'autowrfchem compile'"
+fi
+# Up next: NEI gridding code. Currently only v04 has a makefile.
+cd ../NEI/src/v04
+echo ""
+echo "Compiling NEI emiss_v04..."
+make >& "$mydir/COMPLOGS/compile_emissv04.log"
+nei11exit=$?
+if [ $nei11exit -eq 0 ]; then
+    exitstat=$((exitstat - 8))
+fi
+
+
+# Now MEGAN
+cd ../../../MEGAN/src
+echo ""
+echo "Compiling megan_bio_emiss..."
+./make_util megan_bio_emiss >& "$mydir/COMPLOGS/compile_megan.log"
+meganexit=$?
+if [ $meganexit -eq 0 ]; then
+    exitstat=$((exitstat - 16))
+fi
+
+# And MOZBC
+cd ../../MOZBC/src
+echo ""
+echo "Compiling MOZBC..."
+./make_mozbc >& "$mydir/COMPLOGS/compile_mozbc.log"
+mozbcexit=$?
+if [ $mozbcexit -eq 0 ]; then
+    exitstat=$((exitstat - 32))
+fi
+
+exit $exitstat

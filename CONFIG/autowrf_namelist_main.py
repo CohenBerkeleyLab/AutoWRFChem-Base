@@ -1,0 +1,449 @@
+from __future__ import print_function
+import sys
+import os
+import datetime as dt
+import autowrf_classlib as WRF
+from autowrf_classlib import UI
+import pdb
+
+def DomainsPath():
+    return os.path.join(os.path.dirname(__file__), "DOMAINS")
+
+def NamelistsPath():
+    return os.path.join(os.path.dirname(__file__), "NAMELISTS")
+
+def Startup():
+    # Check if the DOMAINS and NAMELISTS subfolders exist already,
+    # create them if not
+    if not os.path.isdir(DomainsPath()):
+        os.mkdir(DomainsPath())
+
+    if not os.path.isdir(NamelistsPath()):
+        os.mkdir(NamelistsPath())
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+def SelectWPSDomain():
+    files = os.listdir(DomainsPath())
+    domfiles = []
+    for f in files:
+        if f.startswith("namelist.wps."):
+            domfiles.append(f)
+
+    if len(domfiles) > 0:
+        wpsfile = UI.UserInputList("Choose the domain file to use: ", domfiles)
+        return os.path.join(DomainsPath(), wpsfile)
+    else:
+        print("No domain files found in {0}".format(DomainsPath()))
+        return None
+
+def SelectPreexistingNamelists():
+    files = os.listdir(NamelistsPath())
+    wrffiles = []
+    wpsfiles = []
+    for f in files:
+        if f.startswith("namelist.input"):
+            wrffiles.append(f)
+        elif f.startswith("namelist.wps"):
+            wpsfiles.append(f)
+
+    if len(wrffiles) > 0:
+        wrffile = UI.UserInputList("Choose the WRF namelist: ", wrffiles)
+        wrffile = os.path.join(NamelistsPath(), wrffile)
+    else:
+        print("No WRF namelists found in {0}".format(NamelistsPath()))
+        wrffile=None
+
+    if len(wpsfiles) > 0:
+        wpsfile = UI.UserInputList("Choose the WPS namelist: ", wpsfiles)
+        wpsfile = os.path.join(NamelistsPath(), wpsfile)
+    else:
+        print("No WPS namelists found in {0}".format(NamelistsPath()))
+        wpsfile=None
+
+    return wrffile, wpsfile
+
+def LoadMenu():
+    opts = ["Load standard templates",
+            "Load a WPS domain",
+            "Load a pair of WPS/WRF namelists",
+            "Modify the current namelists",
+            "Quit"]
+
+    loadmethod = UI.UserInputList("What namelist would you like to load?", opts, returntype="index")
+    if loadmethod == 0:
+        return WRF.NamelistContainer()
+    elif loadmethod == 1:
+        wpsfile = SelectWPSDomain()
+        if wpsfile is not None:
+            nlc = WRF.NamelistContainer(wpsfile=wpsfile)
+            nlc.UserSetMet()
+            return nlc
+        else:
+            return None
+    elif loadmethod == 2:
+        wrffile, wpsfile = SelectPreexistingNamelists()
+        if wrffile is not None and wpsfile is not None:
+            nlc = WRF.NamelistContainer(wrffile=wrffile, wpsfile=wpsfile)
+            nlc.UserSetMet()
+            return nlc
+        else:
+            return None
+    elif loadmethod == 3:
+        return WRF.NamelistContainer.LoadPickle()
+    elif loadmethod == 4:
+        return None
+
+def PrintHelp():
+    # Find the DOC section in this file and print it
+    pline = False
+    with open(__file__, 'r') as f:
+        for line in f:
+            if not pline:
+                if "# DOC" in line and "#notthis" not in line:
+                    pline = True
+            else:
+                if "# ENDDOC" in line and "#notthis" not in line:
+                    pline = False
+                else:
+                    l = line.strip()
+                    # Remove the leading #
+                    if l.startswith("#"):
+                        l = l[1:]
+
+                    print(l)
+
+def SaveMenu(nlc):
+    # Decide how to save the namelists. Pass it the namelist container
+    opts = ["Write namelist regularly (namelist files and pickle)",
+            "Write just the namelist files (not pickle - i.e. temporary namelists)",
+            "Save namelists to NAMELISTS folder for later",
+            "Do not save"]
+    sel = UI.UserInputList("Save the namelists?", opts, returntype="index")
+
+    my_dir = os.path.dirname(__file__)
+
+    if sel == 0:
+        nlc.WriteNamelists(dir=my_dir)
+        nlc.SavePickle()
+    elif sel == 1:
+        nlc.WriteNamelists(dir=my_dir)
+    elif sel == 2:
+        suffix = UI.UserInputValue("suffix")
+        nlc.WriteNamelists(dir=NamelistsPath(), suffix=suffix)
+
+        userans = raw_input("Do you also write to make these the current namelist? y/[n]: ")
+        if userans.lower() == "y":
+            print("Writing out namelists.")
+            nlc.WriteNamelists(dir=my_dir)
+            nlc.SavePickle()
+        else:
+            print("Not writing out namelists.")
+    elif sel == 3:
+        pass
+
+def StartMenu():
+    opts = ["Create or modify namelists",
+            "Show help",
+            "Quit"]
+    while True:
+        sel = UI.UserInputList("What would you like to do?",opts,returntype="index", emptycancel=False)
+        if sel == 0:
+            return LoadMenu()
+        elif sel == 1:
+            PrintHelp()
+        elif sel == 2:
+            exit(0)
+
+def ParseDateTime(dt_in):
+    if dt_in[0] == "+" or dt_in[0] == "-":
+        # Convert into timedelta
+        return ParseTimeDelta(dt_in)
+    elif "_" not in dt_in and "-" not in dt_in and ":" in dt_in:
+        # Only a time component given: convert to a datetime.time object
+        # and use that.
+        dt_in = dt_in.strip()
+        if len(dt_in) != 8:
+            raise RuntimeError("If entering only a time (not date) component, the format must be HH:MM:SS")
+        # Don't forget that python indices are [inclusive, exclusive] because, well, who knows
+        hr = int(dt_in[0:2])
+        mn = int(dt_in[3:5])
+        sec = int(dt_in[6:8])
+
+        return dt.time(hr, mn, sec)
+    else:
+        # Parse it as a WPS type date string: yyyy-mm-dd_HH:MM:SS
+        return WRF.WpsNamelist.ConvertDate(dt_in)
+
+def ParseTimeDelta(td_in):
+    # These must be given in the form [+/-]xxx[s/m/h/d]
+    if td_in[-1] == "s":
+        scale = 1
+    elif td_in[-1] == "m":
+        scale = 60
+    elif td_in[-1] == "h":
+        scale = 3600
+    elif td_in[-1] == "d":
+        scale = 3600*24
+    else:
+        eprint("If trying to change start or end time by a relative amount (--start-time=+1d, --start-time=-3h), the")
+        eprint("value MUST end in one of d, h, m, s (days, hours, minutes, seconds, respectively)")
+        exit(1)
+
+    try:
+        x = float(td_in[:-1])
+    except ValueError:
+        eprint("Could not parse one of the relative changes to start-date or end-date, or the value of run-time")
+        exit(1)
+
+    return dt.timedelta(seconds=x*scale)
+
+def SplitOpt(opt):
+    opt = opt.strip().split("=")
+    sopt = [o.strip() for o in opt]
+    if len(sopt) != 2:
+        raise RuntimeError("All options must be specified as --optname=value")
+    else:
+        return sopt[0], sopt[1]
+
+#### MAIN PROGRAM ####
+# Call startup regardless of if we are running as the main program or as a module
+Startup()
+
+if __name__ == "__main__":
+
+    # Namelist generation has 3 modes:
+    #  1) Allow the user to interactively set the options
+    #  2) Use specified existing namelists, ensuring that common options are matched
+    #  3) Make a temporary namelist. This will write out the namelist file, but not overwrite the existing pickle file.
+    #
+    # If option 1 is chosen, it will need to load the template namelists and start the interactive menu. Upon finishing,
+    # the user can choose to save the namelist files in another location to use with option 2 later, in addition to
+    # saving the actual files to be linked. This can also load a different preexisting
+    #
+    # If option 2 is chosen, meteorology will need to be specified on the command line and optionally the namelist
+    # files. (If the files are not specified, it will use the usual template files).
+    #
+    # Option 3 needs the values to be modified temporarily specified on the command line. Start and end dates are
+    # are special and must be specified using --start-date=yyyy-mm-dd_HH:MM:SS and --end-date=yyyy-mm-dd_HH:MM:SS. All
+    # other options can be modified by using their name as the flag, e.g. --bio_emiss_opt=3 will set bio_emiss_opt to 3
+    # in the WRF namelist.
+    #
+    # This program will create two folders in its directory the first time it runs, DOMAINS and NAMELISTS. DOMAINS is
+    # intended as a location that you can store WPS namelists that define various domains you are interested in.
+    # NAMELISTS on the other hand is where you can save WPS/WRF namelist pairs for future use.  The intention is that
+    # you can play around with WPS namelist options in the WPS directory, using the plotgrids.ncl utility to check if
+    # the domain is what you want, then copy/move that namelist (with some descriptive suffix) to DOMAINS to use later.
+    # NAMELISTS is intended to be a location where this program can save namelists at your command.
+
+    arg = sys.argv
+
+    if len(arg) == 1: # should have just this function name
+        # Option 1: interactive
+        while True:
+            nlc = StartMenu()
+            if nlc is not None:
+                break
+
+        while nlc.UserMenu():
+            pass
+        SaveMenu(nlc)
+    if len(arg) > 1:
+        if arg[1] == "-h" or arg[1] == "--help":
+            PrintHelp()
+            print("Allowed met types are: ", end="")
+            for m in WRF.Namelist.mets:
+                print(m, end=" ")
+            print("")
+        elif arg[1] == "load":
+            argopts = arg[2:]
+            metopt = None
+            suffix = None
+            for opt in argopts:
+                optname, optval = SplitOpt(opt)
+                if optname == "--met":
+                    metopt = optval
+                elif optname == "--suffix":
+                    suffix = optval
+
+                if metopt is None:
+                    eprint("Error: requesting to load an existing namelist requires meteorology to be specified with")
+                    eprint("       --met=<met option> in order to ensure that both namelists use the same meteorology")
+                    eprint("       settings. <met option> can be one of {0}".format(WRF.Namelist.mets))
+                    exit(1)
+                else:
+                    if suffix is not None:
+                        wrffname = WRF.NamelistContainer.wrf_namelist_outfile + "." + suffix
+                        wpsfname = WRF.NamelistContainer.wps_namelist_outfile + "." + suffix
+                        wrffile = os.path.join(NamelistsPath(), wrffname)
+                        wpsfile = os.path.join(NamelistsPath(), wpsfname)
+                        nlc = WRF.NamelistContainer(met=metopt, wrffile=wrffile, wpsfile=wpsfile)
+                    else:
+                        nlc = WRF.NamelistContainer(met=metopt)
+
+                    nlc.WriteNamelists()
+                    nlc.SavePickle()
+
+        elif arg[1] == "mod" or arg[1] == "modify" or arg[1] == "tempmod":
+            # So this needs to parse the options looking for a couple things:
+            #   1) start-date and end-date need to be handled specially, to use the SetTimePeriod method
+            #   2) run-time also needs to be handled specially as well
+            #   3) Also add the capability to do relative changes to start and end time with the syntax
+            #       --start-date=+12h
+            #   4) start-date, end-date and run-time need to be processed at the end once we are sure which ones we
+            #       have
+            nlc = WRF.NamelistContainer.LoadPickle()
+            start_date = None
+            end_date = None
+            run_time = None
+            for a in arg[2:]:
+                optname, optval = SplitOpt(a)
+                if optname == "--start-date":
+                    start_date = ParseDateTime(optval)
+                elif optname == "--end-date":
+                    end_date = ParseDateTime(optval)
+                elif optname == "--run-time":
+                    run_time = ParseTimeDelta(optval)
+                elif optname == "--met":
+                    nlc.SetMet(optval)
+                else:
+                    optname = optname.replace("-", "")
+                    nlc.CmdSetOtherOpt(optname, optval)
+
+            if start_date is not None or end_date is not None:
+                nlc.SetTimePeriod(start_date, end_date)
+
+            if run_time is not None:
+                if run_time < dt.timedelta(0):
+                    eprint("Negative values of run time are not permitted")
+                    exit(1)
+
+                # both are returned to ensure it is not stored as a tuple
+                start_date, end_date = nlc.GetTimePeriod()
+                end_date = start_date + run_time
+                nlc.SetTimePeriod(start_date, end_date)
+
+            nlc.WriteNamelists()
+            # Only write the pickle if the change is not temporary
+            if arg[1] == "mod" or arg[1] == "modify":
+                nlc.SavePickle()
+
+        elif "check" in arg[1]:
+            nlc = WRF.NamelistContainer.LoadPickle()
+            if "wrf" in arg[1]:
+                namelist = nlc.wrf_namelist
+            elif "wps" in arg[1]:
+                namelist = nlc.wps_namelist
+            else:
+                eprint("If trying to check an argument, must use check-wrf-opt or check-wps-opt")
+                eprint("(neither 'wrf' nor 'wps' found in the flag)")
+                exit(1)
+
+            for a in arg[2:]:
+                optname, optval = SplitOpt(a)
+                optname = optname.replace("-", "")
+                nlopt = namelist.GetOptValNoSect(optname,domainnum=1)
+                optval = optval.split(",")
+                optbool = []
+                # Any option should be in a string format. However, some may include single quotes.
+                # So we try comparing with and without single quotes
+                for i in range(len(optval)):
+                    optbool.append(False)
+                    if optval[i] == nlopt:
+                        optbool[i] = True
+                        break
+                    else:
+                        if nlopt.startswith("'"):
+                            nlopt = nlopt[1:]
+                        if nlopt.endswith("'"):
+                            nlopt = nlopt[:-1]
+                        if optval[i] == nlopt:
+                            optbool[i] = True
+                            break
+
+                if all([not b for b in optbool]):
+                    exit(1)
+            exit(0)
+        elif "get" in arg[1]:
+            nlc = WRF.NamelistContainer.LoadPickle()
+            if "wrf" in arg[1]:
+                namelist = nlc.wrf_namelist
+            elif "wps" in arg[1]:
+                namelist = nlc.wps_namelist
+            else:
+                eprint("If trying to get an argument, must use get-wrf-opt or get-wps-opt")
+                eprint("(neither 'wrf' nor 'wps' was found in the flag)")
+                exit(1)
+
+            optname = arg[2].replace("-", "")
+            if not namelist.IsOptInNamelist(optname):
+                eprint("Could not find '{0}' in specified namelist".format(optname))
+                exit(1)
+            else:
+                print(namelist.GetOptValNoSect(optname,domainnum=1))
+        else:
+            eprint("Command '{0}' not recognized".format(arg[1]))
+            exit(1)
+
+    if len(arg) == 1:
+        print("Goodbye")
+    exit(0)
+# Documentation section that will be printed as help text from the command line
+
+# DOC
+#
+# autowrf_namelist_main.py has 3 modes of usage:
+#   python autowrf_namelist_main.py: with no other options, this enters an interactive mode that allows the user to
+#       interactively set or modify the WRF and WPS namelists. (The main advantage of using this mode over directly
+#       editing the namelists is that this program keeps common options between WRF and WPS in sync.)
+#
+#   python autowrf_namelist_main.py load --met=<mettype> --suffix=<suffix>: this mode will immediately make the
+#       namelists contained in the NAMELIST folder with the suffix defined by the --suffix option the active namelists.
+#       A meteorology must be specified with the --met option to be sure that those settings are syncronized between
+#       the WRF and WPS namelists. If the --suffix option is omitted, then the template files will be used.
+#
+#   python autowrf_namelist_main.py mod: this mode will allow you to modify the current namelist. Most settings in
+#       either the WPS or WRF namelist can be set directly by specifying their name as the option flag, e.g
+#       --history_interval=60 will set the history_interval option in the WRF namelist to 60. Note that settings that
+#       are boolean values must be given the value of .true. or .false. or it will be rejected. Further, at present,
+#       all domains will be set to this value (there is no way to modify nested domains separately with this version of
+#       this program).
+#           Several options are reserved: any options associated with meteorology cannot be changed directly and can
+#       only be changed by giving the flag --met=<mettype>, where <mettype> is one of the allowed meteorologies (see
+#       below).
+#           Further, to change the time period, the flags --start-date, --end-date, and --run-time must be used.
+#       --state-date and --end-date can be one of two forms. First, they can be given as yyyy-mm-dd or
+#       yyyy-mm-dd_HH:MM:SS to set either as an absolute value. Second, a relative change can be given as
+#       --start-date=[+/-]nnn[d/h/m/s], that is, the option must start with either a + or - (indicating positive or
+#       negative change respectively) and end in d, h, m, s (indicating days, hours, minutes, seconds). Thus,
+#       --start-date=+12h will make the start date 12 hours later, while --end-date=-7d would make the run end 7 days
+#       sooner.
+#           Finally, --run-time can be used to set the end time relative to the start time. The syntax is the same as a
+#       relative change to start or end date except a + sign is not needed at the beginning (so --run-time=12h will
+#       set the end time to be 12 hours after the start time). Negative values will be rejected. Note that the run time
+#       option is applied after the start date one, regardless of what order the options are on the command line.
+#           Running this command without any options restores the namelists to the values stored in the pickle (useful
+#       in conjunction with the "tempmod" mode below).
+#
+#   python autowrf_namelist_main.py modify: same behavior as "mod"
+#
+#   python autowrf_namelist_main.py tempmod: similar behaviour to "mod," except that in this case the pickle is not
+#       changed. Since that is what is used to load the current namelist when executing the "mod" option, this means
+#       that the next time you run this with the mod or similar option, you will be starting from the state BEFORE
+#       running the "tempmod" command. This is very useful when preparing NEI emissions, as that requires you to
+#       set a 12 hour run time briefly to prepare the emissions. This way, you could run
+#       python autowrf_namelist_main.py tempmod --run-time=12h to generate the proper namelist, then
+#       python autowrf_namelist_main.py mod to restore the current settings. (Of course you'd need to generate the other
+#       12 hr NEI file, but this is just an example).
+#
+#   python autowrf_namelist_main.py check-wrf-opt: allows you to pass namelist options using the same flags as the "mod"
+#       method (except that the special flags --start-date, --end-date, and --run-time cannot be used). If all the
+#       options specified on the command line are correct as stored in the current permanent namelist (so temporary
+#       changes made with "tempmod" cannot be checked), this will exit with 0. If any do not match, it exits with 1. If
+#       you wish to allow the option to be one of several values, separate each with a comma, i.e
+#       --io_form_auxinput5=2,11 will return 0 if io_form_auxinput5 is 2 or 11.
+#
+#   python autowrf_namelist_main.py check-wps-opt: same as check_wrf_opt but for WPS.
+#
+# ENDDOC

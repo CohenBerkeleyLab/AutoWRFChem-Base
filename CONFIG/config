@@ -1,0 +1,31 @@
+#!/bin/bash
+
+mydir=`dirname $0`
+outfile="$mydir/../wrfbuild.cfg"
+
+# Have the user choose available met 
+mettypes=("NARR" "Other")
+i=0
+echo "Choose the meterology type:"
+for met in "${mettypes[@]}"; do
+    i=$((i+1))
+    echo "  $i: $met"
+done
+while true; do
+    echo -n "Enter choice (1-${i}):"
+    read userin
+    if [ $userin -ge 1 -a $userin -le $i ]; then
+        break
+    fi
+done
+
+rm -f $outfile
+
+sel=$((userin-1))
+metType=${mettypes[$sel]}
+echo "metType=$metType" >> $outfile
+
+echo "Enter the path where the meteorology data is stored."
+echo "You may also skip this and modify BUILD/wrfbuild.cfg later."
+read metDir
+echo "metDir='$metDir'" >> $outfile

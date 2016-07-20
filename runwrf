@@ -1,0 +1,110 @@
+#!/bin/bash
+#
+# This is it! Time to run WRF. Will do some checking first though.
+# 1) Is the namelist.input correctly linked? If not, error because
+#    the user needs to check that the emissions and meteorology are
+#    correct.
+# 2) The emissions files are present.
+# 3) The met files for the start and end date are present
+
+cd `dirname $0`
+mydir=`pwd -P`
+pyprog="$mydir/CONFIG/autowrf_namelist_main.py"
+
+# See if this was called with the "override" flag
+override=false
+usempi=true
+while [ $# -gt 0 ]; do
+    case $1 in
+        override|--override)
+            override=true
+            ;;
+        --ntasks*)
+            i=`expr index "$1" "="`
+            ntasks=${1:i}
+            ;;
+        --nompi)
+            usempi=false
+            ;;
+    esac
+    shift
+done
+
+# INPUT CHECKING 
+if $usempi; then
+    if [ -z "$ntasks" ]; then
+        echo "Must pass a number of tasks to start with --ntasks= if running WRF in parallel"
+        echo "(give option --nompi to run using syntax ./wrf.exe)"
+        exit 1
+    fi
+fi
+
+cd ../WRFV3/run
+if [ ! "namelist.input" -ef "../../BUILD/CONFIG/namelist.input" ]; then
+    echo "WRFV3/run/namelist.input is not a link to BUILD/CONFIG/namelist.input"
+    echo "This should NOT be the case if you have run 'autowrfchem prepinpt'"
+    if ! $override; then
+        echo "Aborting run. To force the run, use 'autowrfchem run --override'"
+        exit 1
+    fi
+fi
+
+missingfile=false
+if [ ! -f wrfchemi_00z_d01 -o ! -f wrfchemi_12z_d01 ]; then
+    echo "One or both of wrfchemi_00z_d01, wrfchemi_12z_d01 not found in WRFV3/run"
+    missingfile=true
+fi
+
+if [ ! -f wrfbiochemi_d01 ]; then
+    echo "wrfbiochemi_d01 not found in WRFV3/run"
+    missingfile=true
+fi
+
+syr=`python $pyprog get-wrf-opt --start_year`
+syr=`printf %04d $syr`
+smn=`python $pyprog get-wrf-opt --start_month`
+smn=`printf %02d $smn`
+sdy=`python $pyprog get-wrf-opt --start_day`
+sdy=`printf %02d $sdy`
+eyr=`python $pyprog get-wrf-opt --end_year`
+syr=`printf %04d $eyr`
+emn=`python $pyprog get-wrf-opt --end_month`
+emn=`printf %02d $emn`
+edy=`python $pyprog get-wrf-opt --end_day`
+edy=`printf %02d $edy`
+
+metname="met_em.d01.${syr}-${smn}-${sdy}"
+ls ${metname}* >/dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo "Missing met files for the first day of the run (pattern is $metname)"
+    missingfile=true
+fi
+
+metname="met_em.d01.${eyr}-${emn}-${edy}"
+ls ${metname}* >/dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo "Missing met files for the last day of the run (pattern is $metname)"
+    missingfile=true
+fi
+
+if $missingfile; then
+    echo "One or more missing files, aborting run."
+    exit 1
+fi
+
+# Actually run WRF!
+if $usempi; then
+    errorfile="rsl.error.0000"
+    mpirun -np $ntasks wrf.exe
+    wrfexit=$?
+else
+    errorfile="runwrf.log"
+    ./wrf.exe >& runwrf.log
+    wrfexit=$?
+fi
+
+if [ $wrfexit -ne 0 ]; then
+    echo "WRF failed (exit code $wrfexit). Check the $errorfile file in WRFV3/run"
+    echo "to determine the cause."
+fi
+exit $wrfexit

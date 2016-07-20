@@ -1,0 +1,90 @@
+#!/bin/bash
+# Initialization script for autowrfchem. Run this to set up for automatic
+# running of WRF-Chem
+
+cd `dirname $0`
+mydir=`pwd -P`
+cd ..
+
+# Link the main executable up one directory to make it obvious which command to call
+ln -s "$mydir/autowrfchem_main" autowrfchem 
+
+# Check if all utilities needed are installed
+doexit=false
+which python >& /dev/null
+if [ $? -ne 0 ]; then
+    echo "python is not on your path. This is necessary to use autowrfchem."
+    doexit=true
+fi
+
+which perl >& /dev/null
+if [ $? -ne 0 ]; then
+    echo "perl is not on your path. This is necessary to use autowrfchem."
+    doexit=true
+fi
+
+which git >& /dev/null
+if [ $? -ne 0 ]; then
+    echo "git is not available on this system."
+    doexit=true
+fi
+
+if $doexit; then
+    exit 1
+fi
+
+rootrepo="128.32.208.13:/volume2/share2/GROUP/MODELING/WRF-Chem/Auto-WRF-Chem"
+
+# These two arrays will be used in selecting the WPS version. The first is used to print out
+# the menu options. The second should correspond to the remote branch name containing that version
+# such that running "git checkout origin/${branchname[$sel]}" would checkout that branch.
+# These are separated to allow more flexibility in naming the branches (in case there's a
+# mistake in the naming) but the branches should REALLY be named with the version number for
+# consistency. Note that the order of the two must be the same.
+wpsmenu=("v3.5.1" "v3.6")
+branchname=("v3.5.1" "v3.6")
+
+# Determine if it needs to clone anything (WPS, NEI, MEGAN, MOZBC). WPS will need to know
+# what version to clone (maintained as different branches in the WPS repo)
+if [ ! -e WPS -o ! -e NEI -o ! -e MEGAN -o ! -e MOZBC ]; then
+    echo "AUTOWRFCHEM expects the directories WPS, NEI, MEGAN, and MOZBC to be siblings to it."
+    echo "One or more of these is missing; would you like to clone the missing ones automatically?"
+    read -p "Enter y or n: " userans
+    if [ "$userans" == "y" -o "$userans" == "Y" ]; then
+        echo "You will need to enter the password for RCCohenLab on the fileserver for each repo (sorry)"
+        
+        if [ ! -e WPS ]; then
+            git clone RCCohenLab@${rootrepo}/WPS351.git WPS
+            # Have the user choose the WPS version
+            cd WPS
+            echo "Choose the WPS version:"
+            i=0
+            for vers in "${wpsmenu[@]}"; do 
+                i=$((i+1))
+                echo "  $i: $vers"
+            done
+            while true; do
+                echo -n "Enter choice (1-${i}): "
+                read userin
+                if [ $userin -ge 1 -a $userin -le $i ]; then break; fi
+            done
+            sel=$((userin-1))
+            git checkout -b ${branchname[$sel]} origin/${branchname[$sel]}
+            cd ..
+        fi
+
+        if [ ! -e NEI ]; then
+            git clone RCCohenLab@${rootrepo}/NEI.git NEI
+        fi
+
+        if [ ! -e MEGAN ]; then
+            git clone RCCohenLab@${rootrepo}/MEGAN.git MEGAN
+        fi
+
+        if [ ! -e MOZBC ]; then
+            git clone RCCohenLab@${rootrepo}/MOZBC.git MOZBC
+        fi
+    else
+        echo "You have chosen not to clone the various components. They must still be provided for autowrfchem to work."
+    fi
+fi

@@ -1,0 +1,41 @@
+#!/bin/bash
+# Okay, this one will not be too bad. All it needs to do is
+# go into the NEI directory and run it. In the future, it may
+# need to do both NEI05 or NEI11.
+# This will however handle the copying and linking of the wrfem
+# files in the run directory
+cd `dirname $0`
+mydir=`pwd -P`
+
+cd "$mydir/../../NEI/src/v04"
+./emiss_v04.exe
+emissexit=$?
+
+# Ensure that the WPS namelist is linked to the one in the CONFIG folder
+if [ -e namelist.wps ]; then
+    # Back up only if not a link already
+    lnk=`readlink namelist.wps`
+    if [ ! -z $lnk ]; then
+        mv namelist.wps namelist.wps.autowrf-backup
+    fi
+fi
+
+ln -s "$mydir/../CONFIG/namelist.wps"
+
+if [ $emissexit -ne 0 ]; then
+    echo "emiss_v04.exe failed with exit code $emissexit"
+    exit 1
+fi
+
+for f in wrfem*; do
+    if [ -f "../../../WRFV3/run/$f" ]; then
+        mv "../../../WRFV3/run/$f{,.autowrf-backup}"
+    fi
+done
+
+cp wrfem* ../../../WRFV3/run
+cd ../../../WRFV3/run
+ln -sf wrfem_00to12Z wrfem_00to12z_d01
+ln -sf wrfem_12to24Z wrfem_12to24z_d01
+
+exit 0

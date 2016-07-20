@@ -1,0 +1,149 @@
+#!/bin/bash
+#
+# First parse arguments
+
+myname=`basename $0`
+mydir=`dirname $0`
+currdir=`pwd`
+
+doconfig=false
+namelistonly=false
+envvaroverride=false
+docompile=false
+doclean=false
+doprepinpt=false
+dorun=false
+while [ $# -gt 0 ]; do
+    case $1 in
+    -h|--help)
+        echo ""
+        echo "$myname: utility to automate the compilation and running of WRF-Chem"
+        echo "  Modes of operation: "
+        echo "    ./$myname config : will require user input to generate"
+        echo "        the necessary configuration files (so don't run this as"
+        echo "        part of a batch job). It will also set a global namelist"
+        echo "        that will ensure WRF, WPS, and NEI are all set to the same"
+        echo "        domain."
+        echo "    ./$myname config namelist : will only reconfigure the"
+        echo "        namelist. Useful if you just need to change the domain or"
+        echo "        time period."
+        echo "    ./$myname compile : will execute the compilation of all"
+        echo "        the components of WRF-Chem and it's input preparation,"
+        echo "        including WRF-Chem, WPS, convert_emiss, emiss_v0x.F,"
+        echo "        megan_bio_emiss, and mozbc. It will skip compiling if"
+        echo "        it finds an existing .exe file."
+        echo "    ./$myname clean : will remove all compiled files for a clean"
+        echo "        compile."
+        echo "    ./$myname prepinpt : will prepare meteorology, NEI emissions,"
+        echo "        MEGAN emissions, and MOZBC initial and boundary conditions."
+        echo "    ./$myname run : will run WRF-Chem. This will first check"
+        echo "        that the WRF namelist.input file matches what was configured"
+        echo "        by ./$myname config."
+        echo ""
+        echo ""
+        echo "  Exit codes for the compile and prepinpt steps will indicate which step"
+        echo "  failed using the numeric value as a binary flag. For compile:"
+        echo "      1st bit = WRF"
+        echo "      2nd bit = WPS"
+        echo "      3rd bit = convert_emiss"
+        echo "      4th bit = emiss_v0x"
+        echo "      5th bit = megan_bio_emiss"
+        echo "      6th bit = mozbc"
+        echo "  So an exit code of 1 means only WRF failed to compile, while 56 (= 000111)"
+        echo "  means emiss_v0x, megan_bio_emiss, and mozbc all failed to compile."
+        echo "  The codes are the same for prepinpt, except that the first bit will never"
+        echo "  be set."
+        echo ""
+        echo "  Note that this utility is only set up to handle one domain currently."
+        echo ""
+        exit 0
+        ;;
+    config)
+        doconfig=true
+        ;;
+    namelist)
+        namelistonly=true
+        ;;
+    override)
+        envvaroverride=true
+        ;;
+    compile)
+        docompile=true
+        ;;
+    clean)
+        doclean=true
+        ;;
+    prepinpt)
+        doprepinpt=true
+        ;;
+    run)
+        dorun=true
+        ;;
+    esac
+    shift
+done
+
+# Check that directory structure is intact
+missingdir=""
+if [ ! -d WRFV3 ]; then missingdir="$missingdir WRFV3"; fi
+if [ ! -d WPS ]; then missingdir="$missingdir WPS"; fi
+if [ ! -d NEI ]; then missingdir="$missingdir NEI"; fi
+if [ ! -d MEGAN ]; then missingdir="$missingdir MEGAN"; fi
+if [ ! -d MOZBC ]; then missingdir="$missingdir MOZBC"; fi
+
+if [ ! -z "$missingdir" ]; then
+    echo "The directory(ies) $missingdir are not present as child directories."
+    exit 1
+fi
+
+
+cd $mydir
+export AUTOWRFDIR=`pwd -P`
+if $doconfig; then
+    cd BUILD
+    configopts=""
+    if $namelistonly; then
+        configopts="$configopts --namelist-only"
+    fi
+    if $envvaroverride; then
+        configopts="$configopts --override"
+    fi
+    ./configure $configopts # set env vars and all namelist options.
+    configexit=$?
+
+    if ! $namelistonly; then
+        echo ""
+        echo "*****************************************************************************"
+        echo "Configuration files generated. Run $myname with 'compile' to begin compilation"
+        echo "*****************************************************************************"
+        echo ""
+    fi   
+ 
+    exit $configexit
+fi
+if $doclean; then
+    BUILD/cleanall
+    exit $?
+fi
+if $docompile; then
+    BUILD/compileall
+    compexit=$?
+    if [ $compexit -ne 0 ]; then
+        echo "***********************************************"
+        echo "One or more compilations failed (exit status $compexit)"  
+        echo "***********************************************"
+    fi
+    exit $compexit
+fi
+if $doprepinpt; then
+    BUILD/prepinpt
+    exit $?
+fi
+if $dorun; then
+    BUILD/runwrf
+    exit $?
+fi
+
+echo "No action specified. See help for usage of $myname."
+exit 0
+

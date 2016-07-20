@@ -1,0 +1,90 @@
+#!/bin/bash
+# This program will carry out the configuration of WRF-Chem, including
+#   1) configuring the environmental variables
+#   2) configuring WRF and WPS
+#   3) setting up the namelist
+
+mydir=`dirname $0`
+myname=`basename $0`
+cd $mydir
+mydir=`pwd -P` # transform the directory from relative to absolute
+
+namelistonly=false
+envvaropts=""
+while [ $# -gt 0 ]; do
+    case $1 in
+    --namelist-only)
+        namelistonly=true
+        ;;
+    --override)
+        envvaropts="--override"
+        ;;
+    esac
+    shift
+done
+
+if ! $namelistonly; then
+
+    # Run the environmental variable configuration
+    CONFIG/wrfenvvar $envvaropts
+    . $mydir/envvar_wrfchem.cfg # source the environmental variable file
+
+    # Run the WRF and WPS configurations
+    echo "You will now be asked to configure WRF by choosing your system's architecture and a nesting scheme"
+    echo "Remember that WRF-Chem requires distributed memory (dmpar) and cannot use shared memory (smpar)."
+    echo -n "Press ENTER to continue."
+    read usercont
+    cd ../WRFV3
+    ./configure
+
+    echo "You will now be asked to configure WPS by choosing your system's architecture. Remember that WPS"
+    echo "can run in serial in most cases."
+    echo -n "Press ENTER to continue."
+    read usercont
+    cd ../WPS
+    ./configure
+    cd $mydir
+
+    # Run the second configure program. Currently this just sets the meteorology path and the met type.
+    CONFIG/config
+
+    # Run the namelist program. Only print this message if doing the full configuration (otherwise I think the
+    # user knows that they are setting the namelists)
+    echo "Finally you can set up your namelists. The Python program about to be called will allow you to interactively"
+    echo "set the namelist options. It will ensure that any common options are matched between the WRF and WPS namelists."
+    echo "The resulting namelists will be placed in BUILD/CONFIG and linked to the WRFV3/run, WPS, and NEI/src/v0x"
+    echo "directories."
+    echo -n "Press ENTER to continue."
+    read usercont
+
+fi
+
+python CONFIG/autowrf_namelist_main.py
+
+# Link the resulting namelists in each place needed (the fancy new NEI program will take
+# the WPS namelist as well)
+cd ../WRFV3/run
+if [ -e namelist.input ]; then
+    mv namelist.input namelist.input.autowrf-backup
+fi
+ln -s ../../BUILD/CONFIG/namelist.input
+
+cd ../../WPS
+if [ -e namelist.wps ]; then
+    mv namelist.wps namelist.wps.autowrf-backup
+fi
+ln -s ../BUILD/CONFIG/namelist.wps
+
+cd ../NEI/src/v04
+if [ -e namelist.wps ]; then
+    mv namelist.wps namelist.wps.autowrf-backup
+fi
+ln -s ../../../BUILD/CONFIG/namelist.wps
+cd ../v03
+if [ -e namelist.wps ]; then
+    mv namelist.wps namelist.wps.autowrf-backup
+fi
+ln -s ../../../BUILD/CONFIG/namelist.wps
+
+echo " Configuration complete! "
+
