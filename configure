@@ -27,6 +27,9 @@ if ! $namelistonly; then
 
     # Run the environmental variable configuration
     CONFIG/wrfenvvar $envvaropts
+    if [ $? -ne 0 ]; then
+        exit 1
+    fi
     . $mydir/envvar_wrfchem.cfg # source the environmental variable file
 
     # Run the WRF and WPS configurations

@@ -20,23 +20,23 @@ rm -f $outfile
 
 if ! $override; then
     doexit=false
-    if [ ! -z $EM_CORE -a $EM_CORE -ne 1 ]; then
+    if [ -z "$EM_CORE" ] || [ "$EM_CORE" -ne 1 ]; then
         echo "EM_CORE should be set to 1 for WRF-Chem"
         doexit=true
     fi
-    if [ ! -z $NMM_CORE -a $NMM_CORE -ne 0 ]; then
+    if [ -z "$NMM_CORE" ] || [ "$NMM_CORE" -ne 0 ]; then
         echo "NMM_CORE should be set to 0 for WRF-Chem"
         doexit=true
     fi
-    if [ ! -z $WRF_EM_CORE -a $WRF_EM_CORE -ne 1 ]; then
+    if [ -z "$WRF_EM_CORE" ] || [ "$WRF_EM_CORE" -ne 1 ]; then
         echo "WRF_EM_CORE should be set to 1 for WRF-Chem"
         doexit=true
     fi
-    if [ ! -z $WRF_NMM_CORE -a $WRF_NMM_CORE -ne 0 ]; then
+    if [ -z "$WRF_NMM_CORE" ] || [ "$WRF_NMM_CORE" -ne 0 ]; then
         echo "WRF_NMM_CORE should be set to 0 for WRF-Chem"
         doexit=true
     fi
-    if [ ! -z $WRF_CHEM -a $WRF_CHEM -ne 1 ]; then
+    if [ -z "$WRF_CHEM" ] || [ "$WRF_CHEM" -ne 1 ]; then
         echo "WRF_CHEM must be set to 1 to compile WRF-Chem"
         doexit=true
     fi

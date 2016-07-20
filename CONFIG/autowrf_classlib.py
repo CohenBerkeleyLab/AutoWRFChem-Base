@@ -4,6 +4,7 @@ import math
 from collections import OrderedDict
 import pickle
 import os
+from glob import glob
 import pdb
 
 class Namelist:
@@ -332,6 +333,7 @@ class NamelistContainer:
     wps_namelist_outfile = "namelist.wps"
     wps_namelist_template_file = os.path.join(my_dir, "namelist.wps.template")
     pickle_file = os.path.join(my_dir, "namelist_pickle.pkl")
+    cfg_fname = os.path.join(self.my_dir,"..","wrfbuild.cfg")
 
     # List of options (besides the dates) duplicated in WRF and WPS
     domain_opts = ["e_we", "e_sn", "dx", "dy", "parent_id", "parent_grid_ratio", "i_parent_start", "j_parent_start"]
@@ -422,12 +424,17 @@ class NamelistContainer:
 
         self.SetTimePeriod(start_time, end_time)
 
+        print("Having modified the time period, verify that the correct MOZBC data file has been selected.")
+        NamelistContainer.UserSetMozFile()
+
     def UserSetDomain(self):
         for opt in self.domain_opts:
             optval = UI.UserInputValue(opt, currval=self.wps_namelist.GetOptValNoSect(opt, 1))
             if optval is not None:
                 self.wrf_namelist.SetOptValNoSect(opt, optval)
                 self.wps_namelist.SetOptValNoSect(opt, optval)
+        print("Having modified the domain, verify that the correct MOZBC data file has been selected.")
+        NamelistContainer.UserSetMozFile()
 
     def UserSetMet(self):
         met_type = UI.UserInputList("Choose your meteorology: ", Namelist.mets)
@@ -441,12 +448,12 @@ class NamelistContainer:
         self.wps_namelist.SetMetOpts(met_type)
 
         # Also make sure that the met choice is reflected in the wrfbuild.cfg file which *should* be one level up
-        cfg_fname = os.path.join(self.my_dir,"..","wrfbuild.cfg")
-        if os.path.isfile(cfg_fname):
-            with open(cfg_fname, 'r') as cfgr:
+
+        if os.path.isfile(self.cfg_fname):
+            with open(self.cfg_fname, 'r') as cfgr:
                 cfg_lines = cfgr.readlines()
 
-            with open(cfg_fname, 'w') as cfgw:
+            with open(self.cfg_fname, 'w') as cfgw:
                 for l in cfg_lines:
                     if "metType=" in l:
                         cfgw.write("metType={0}\n".format(met_type))
@@ -455,6 +462,54 @@ class NamelistContainer:
         else:
             print("Warning: could not find the wrfbuild.cfg file to ensure the meteorology is consistent.")
             print("Check that the meteorology is correct in that file before running WPS.")
+
+    @staticmethod
+    def UserSetMozFile():
+        # This function should be called any time the domain or time period is changed. It will ask the user to verify
+        # that the current Mozart boundary condition file is the correct one, or set one if none exists.
+        # First we need two pieces of information: one, if there is a current file, what it is. Two, what files are
+        # available.
+
+        with open(NamelistContainer.cfg_fname, 'r') as cfgr:
+            cfg_lines = cfgr.readlines()
+
+        mozFilename=None
+        for l in cfg_lines:
+            if "mozbcFile" in l:
+                tmp = l.split("=")
+                mozFilename=tmp[1]
+                break
+
+        mozDataDir = os.path.join(NamelistContainer.my_dir,"..","..","MOZBC","data")
+        if not os.path.exists(mozDataDir):
+            print("You have not created the 'data' link or folder in MOZBC!")
+            print("This must be created and contain your MOZBC files. Both")
+            print("this program and the MOZBC component of the automatic WRF")
+            print("program rely on this.")
+            return None
+
+        mozFiles = glob(os.path.join(mozDataDir, "*.nc"))
+        if len(mozFiles) < 1:
+            print("No MOZBC data files present! You need to download some.")
+            print("As of 20 Jul 2016, they can be obtained at")
+            print("http://www.acom.ucar.edu/wrf-chem/mozart.shtml")
+            return None
+
+        newMozFilename = UI.UserInputList("Choose the MOZBC file to use: ", mozFiles,currentvalue=mozFilename)
+        if newMozFilename is None and mozFilename is not None:
+            newMozFilename = mozFilename
+            with open(NamelistContainer.cfg_fname, 'w') as cfgw:
+                for l in cfg_lines:
+                    if "mozbcFile" in l:
+                        cfgw.write("mozbcFile=\"{0}\"\n".format(newMozFilename))
+                    else:
+                        cfgw.write(l)
+        else:
+            print("No MOZART file selected! You will need to select one before running")
+            print("the input preparation step. Rerunning 'autowrfchem config namelist'")
+            print("and modifying the current namelist will allow you to select a file")
+            print("later.")
+            return None
 
     def UserSetOtherOpt(self, namelist):
         sect = UI.UserInputList("Choose the namelist section: ", namelist.opts.keys())
@@ -579,7 +634,8 @@ class NamelistContainer:
         # user to modify mulitple options. Returns True or False, False if the user has requested to exit.
         prmpt = "Choose what to modify or do:"
         opts = ["Start/end date", "Domain (common opts only)", "Meterology", "Other WRF options", "Other WPS options",
-                "Check for NEI compatibility", "Display WRF options", "Display WPS options", "Save and exit"]
+                "Check for NEI compatibility", "Select MOZBC file", "Display WRF options", "Display WPS options",
+                "Save and exit"]
         sel = UI.UserInputList(prmpt, opts, returntype="index", emptycancel=False)
         if sel == 0:
             self.UserSetTimePeriod()
@@ -596,8 +652,10 @@ class NamelistContainer:
         elif sel == 6:
             self.DisplayOptions(self.wrf_namelist)
         elif sel == 7:
-            self.DisplayOptions(self.wps_namelist)
+            NamelistContainer.UserSetMozFile()
         elif sel == 8:
+            self.DisplayOptions(self.wps_namelist)
+        elif sel == 9:
             return False
 
         return True
