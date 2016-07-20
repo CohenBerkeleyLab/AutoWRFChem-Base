@@ -1,0 +1,58 @@
+#!/bin/bash
+# This too will have several steps. First we need to rerun
+# real for the whole time, making sure bio_emiss_opt is still 0,
+# but that it will be reset to 3 when the regular run is done
+# and that io_form_auxinput6 is set to 2 or 11.
+
+cd "`dirname $0`"
+mydir="`pwd -P`"
+pyprog="$mydir/../CONFIG/autowrf_namelist_main.py"
+
+
+python $pyprog tempmod --bio_emiss_opt=0
+cd ../../WRFV3/run
+
+if [ -f wrfbiochemi_d01 ]; then
+    mv wrfbiochemi_d01 wrfbiochemi_d01.autowrf-backup
+fi
+
+# Double check that the namelist is linked to the one in the CONFIG directory. Backup
+# only if not already a link to somewhere
+if [ -f namelist.input ]; then
+    lnk=`readlink namelist.input`
+    if [ ! -z $lnk ]; then
+        mv namelist.input namelist.input.autowrf-backup
+    fi  
+fi
+ln -s "$mydir/../CONFIG/namelist.input"
+
+./real.exe
+realexit=$?
+if [ $realexit -ne 0 ]; then
+    echo "real.exe failed with exit code $realexit when running the full period in preparation for"
+    echo "MEGAN. You should run it directly (with mpirun if compiled in parallel) and check any"
+    echo "output to identify the problem"
+    exit 1
+fi
+
+cd ../../MEGAN/src
+./megan_bio_emiss < namelist.megan >& "$mydir/../PREPLOGS/megan.log"
+meganexit=$?
+if [ $meganexit -ne 0 ]; then
+    echo "MEGAN failed with exit code $meganexit. Review megan.log in $mydir/../PREPLOGS to determine"
+    echo "the cause."
+    exit $meganexit
+fi
+
+if [ ! -f wrfbiochemi_d01 ]; then
+    echo "MEGAN failed to produce wrfbiochemi_d01. Review megan.log in $mydir/../PREPLOGS to determine"
+    echo "the cause."
+    exit 1
+fi
+
+if [ -f "../../WRFV3/run/wrfbiochemi_d01" ]; then
+    mv "../../WRFV3/run/wrfbiochemi_d01{,.autowrf-backup}"
+fi
+
+cp wrfbiochemi_d01 ../../WRFV3/run/
+exit 0

@@ -1,0 +1,44 @@
+#!/bin/bash
+
+cd `dirname $0`
+mydir=`pwd -P`
+
+pyprog="$mydir/../CONFIG/autowrf_namelist_main.py"
+
+# Ensure the PREPLOGS directory exists
+if [ ! -d "$mydir/../PREPLOGS" ]; then
+    mkdir "$mydir/../PREPLOGS"
+fi
+
+# Verify that the settings needed for NEI and MEGAN are present in the current namelist
+badopts=false
+
+# Check various options needed for NEI to work
+python $pyprog check-wrf-opt --io_form_auxinput5=2,11 --io_style_emissions=1 --emiss_inpt_opt=1
+optchk=$?
+if [ $optchk -gt 0 ]; then
+    echo ""
+    echo "One or more of the namelist options expected if using NEI are incorrect."
+    echo "Run 'autowrfchem config namelist' and use the NEI compatibility checker"
+    echo "on the current namelist."
+    badopts=true
+fi
+
+# Do the same for MEGAN
+python $pyprog check_wrf_opt --io_form_auxinput6=2,11 --bio_emiss_opt=3
+optchk=$?
+if [ $optchk -ne 0 ]; then
+    echo ""
+    echo "To use MEGAN for biogenic emissions, you must have io_form_auxinput6 set"
+    echo "to 2 or 11 under the &time_control section of the WRF namelist (11 will"
+    echo "only work if parallel netCDF is installed) and bio_emiss_opt set to 3"
+    echo "under the &chem section of the namelist. One or both of these is not"
+    echo "true. Correct them and rerun the input preparation."
+    badopts=true
+fi
+
+if $badopts; then
+    exit 1
+else
+    exit 0
+fi

@@ -1,0 +1,100 @@
+#!/bin/bash
+# Last one: this one needs to restore the full namelist, then
+# run real for the entire time period with biogenic emissions.
+# The only annoying part will be choosing which input file to 
+# use. That will need to retrieve the value for chem_opt and
+# know which .inp file goes with which mechanism.
+#
+# For expandability, those mappings are included in a text file
+# that this script could parse. If each line was of the format
+# number=file, i.e. 2=RADM2SORG.inp, then this could be done
+# with i=`expr index "$line" "="` and ${line:i}
+
+cd `dirname $0`
+mydir=`pwd -P`
+
+pyprog="$mydir/../CONFIG/autowrf_namelist_main.py"
+chemopt=`python $pyprog get-wrf-opt --chem_opt`
+
+if [ -z "$chem" ]; then
+    echo "Failed to obtain the value of chem_opt. I do not know why that happened."
+    exit 1
+fi
+
+listfile="mozbc-chemopt-list.txt"
+while read -r line; do
+    if [ ${line:0:1} == "#" ]; then
+        continue
+    fi
+
+    i=`expr index "$line" "="`
+    if [ $i -eq 0 ]; then
+        continue
+    fi
+
+    lopt=${line:0:$((i-1))}
+    fname=${line:i}
+    if [ $lopt -eq $chemopt ]; then
+        mozfile=$fname
+        break
+    fi
+done < "$listfile"
+
+if [ -z "$mozfile" ]; then
+    echo "No input file specified for chem_opt=$chemopt in $listfile"
+    echo "You should edit the list file to specify the correct input"
+    echo "file for your chemistry. If there isn't one, specify the file"
+    echo "as NONE."
+    exit 1
+elif [ "$mozfile" == "NONE" ]; then
+    echo "No MOZART --> WRF-Chem mapping available for chem_opt=$chemopt"
+    echo "Skipping MOZBC."
+    exit 0
+fi
+
+# Double check that the input file exists BEFORE we run real (why waste time if
+# it's not going to work?)
+cd ../../MOZBC/src
+if [ ! -f "$mozfile" ]; then
+    echo "$mozfile (the specified .inp file for chem_opt=$chemopt does not exist."
+    exit 1
+fi
+
+cd ../../WRFV3/run
+# Ensure that the namelist is back to the regular options
+python $pyprog tempmod
+# Then double check that the NEI and MEGAN outputs are here
+missingfiles=false
+if [ ! -f "wrfchemi_00z_d01" -o ! -f "wrfchemi_12z_d01" ]; then
+    echo "One or both of wrfchemi_00z_d01, wrfchemi_12z_d01 are not present in run directory"
+    missingfiles=true
+fi
+if [ ! -f "wrfbiochemi_d01" ]; then
+    echo "wrfbiochemi_d01 is not present in run directory"
+    missingfiles=true
+fi
+if $missingfiles
+    exit 1
+fi
+
+./real.exe
+realexit=$?
+if [ $realexit -ne 0 ]; then
+    echo "real.exe failed with exit code $realexit while running the full time period before"
+    echo "running MOZBC. You should run real.exe manually (with mpirun, if WRF is compiled in"
+    echo "parallel) and check the output to determine the cause."
+    exit 1
+fi
+
+cd ../../MOZBC/src
+./mozbc < "$mozfile" >& "$mydir/../PREPLOGS/mozbc.log"
+mozexit=$?
+if [ $mozexit -ne 0 ]; then
+    echo "MOZBC failed with exit code ${mozexit}. You should run mozbc manually (with the command"
+    echo "./mozbc < $mozfile in MOZBC/src) to determine the cause. If the cause is a missing variable"
+    echo "(WRF or MOZART), it would be a good idea to run mozbc manually until you're sure that"
+    echo "all missing variables have been dealt with."
+    exit 1
+else
+    exit 0
+fi
