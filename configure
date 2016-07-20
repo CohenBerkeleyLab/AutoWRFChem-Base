@@ -55,8 +55,8 @@ if ! $namelistonly; then
     # user knows that they are setting the namelists)
     echo "Finally you can set up your namelists. The Python program about to be called will allow you to interactively"
     echo "set the namelist options. It will ensure that any common options are matched between the WRF and WPS namelists."
-    echo "The resulting namelists will be placed in BUILD/CONFIG and linked to the WRFV3/run, WPS, and NEI/src/v0x"
-    echo "directories."
+    echo "The resulting namelists will be placed in $mydir/CONFIG" 
+    echo "and linked to the WRFV3/run, WPS, and NEI/src/v0x directories."
     echo -n "Press ENTER to continue."
     read usercont
 
@@ -67,27 +67,28 @@ python CONFIG/autowrf_namelist_main.py
 # Link the resulting namelists in each place needed (the fancy new NEI program will take
 # the WPS namelist as well)
 cd ../WRFV3/run
-if [ -e namelist.input ]; then
+if [ -e namelist.input -o -L namelist.input ]; then
+    echo "Moving namelist.input to backup"
     mv namelist.input namelist.input.autowrf-backup
 fi
-ln -s ../../BUILD/CONFIG/namelist.input
+ln -s $mydir/CONFIG/namelist.input
 
 cd ../../WPS
-if [ -e namelist.wps ]; then
+if [ -e namelist.wps -o -L namelist.wps ]; then
     mv namelist.wps namelist.wps.autowrf-backup
 fi
-ln -s ../BUILD/CONFIG/namelist.wps
+ln -s $mydir/CONFIG/namelist.wps
 
 cd ../NEI/src/v04
-if [ -e namelist.wps ]; then
+if [ -e namelist.wps -o -L namelist.wps ]; then
     mv namelist.wps namelist.wps.autowrf-backup
 fi
-ln -s ../../../BUILD/CONFIG/namelist.wps
+ln -s $mydir/CONFIG/namelist.wps
 cd ../v03
-if [ -e namelist.wps ]; then
+if [ -e namelist.wps -o -L namelist.wps ]; then
     mv namelist.wps namelist.wps.autowrf-backup
 fi
-ln -s ../../../BUILD/CONFIG/namelist.wps
+ln -s $mydir/CONFIG/namelist.wps
 
 echo " Configuration complete! "
 

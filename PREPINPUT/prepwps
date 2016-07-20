@@ -3,7 +3,7 @@
 # This will be responsible for running all of the 
 # input data prep (WPS, NEI, MEGAN, MOZBC)
 
-mydir=$(dirname $0) # always find this directory, which should be BUILD/PREPINPT
+mydir=$(dirname $0) # always find this directory, which should be PREPINPUT
 cd $mydir
 mydir=`pwd -P`
 # This must contain definitions of the variables

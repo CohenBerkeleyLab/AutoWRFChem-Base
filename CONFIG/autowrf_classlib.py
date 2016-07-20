@@ -333,7 +333,7 @@ class NamelistContainer:
     wps_namelist_outfile = "namelist.wps"
     wps_namelist_template_file = os.path.join(my_dir, "namelist.wps.template")
     pickle_file = os.path.join(my_dir, "namelist_pickle.pkl")
-    cfg_fname = os.path.join(self.my_dir,"..","wrfbuild.cfg")
+    cfg_fname = os.path.join(my_dir,"..","wrfbuild.cfg")
 
     # List of options (besides the dates) duplicated in WRF and WPS
     domain_opts = ["e_we", "e_sn", "dx", "dy", "parent_id", "parent_grid_ratio", "i_parent_start", "j_parent_start"]
@@ -486,6 +486,7 @@ class NamelistContainer:
             print("This must be created and contain your MOZBC files. Both")
             print("this program and the MOZBC component of the automatic WRF")
             print("program rely on this.")
+            raw_input("Press ENTER to continue")
             return None
 
         mozFiles = glob(os.path.join(mozDataDir, "*.nc"))
@@ -493,23 +494,30 @@ class NamelistContainer:
             print("No MOZBC data files present! You need to download some.")
             print("As of 20 Jul 2016, they can be obtained at")
             print("http://www.acom.ucar.edu/wrf-chem/mozart.shtml")
+            raw_input("Press ENTER to continue")
             return None
 
         newMozFilename = UI.UserInputList("Choose the MOZBC file to use: ", mozFiles,currentvalue=mozFilename)
         if newMozFilename is None and mozFilename is not None:
             newMozFilename = mozFilename
-            with open(NamelistContainer.cfg_fname, 'w') as cfgw:
-                for l in cfg_lines:
-                    if "mozbcFile" in l:
-                        cfgw.write("mozbcFile=\"{0}\"\n".format(newMozFilename))
-                    else:
-                        cfgw.write(l)
-        else:
+        elif newMozFilename is None:
             print("No MOZART file selected! You will need to select one before running")
             print("the input preparation step. Rerunning 'autowrfchem config namelist'")
             print("and modifying the current namelist will allow you to select a file")
             print("later.")
+            raw_input("Press ENTER to continue")
             return None
+        
+        wroteMoz=False
+        with open(NamelistContainer.cfg_fname, 'w') as cfgw:
+            for l in cfg_lines:
+                if "mozbcFile" in l:
+                    cfgw.write("mozbcFile=\"{0}\"\n".format(newMozFilename))
+                    wroteMoz=True
+                else:
+                    cfgw.write(l)
+            if not wroteMoz:
+                cfgw.write("mozbcFile=\"{0}\"\n".format(newMozFilename))
 
     def UserSetOtherOpt(self, namelist):
         sect = UI.UserInputList("Choose the namelist section: ", namelist.opts.keys())
@@ -650,9 +658,9 @@ class NamelistContainer:
         elif sel == 5:
             self.UserNEICompatCheck()
         elif sel == 6:
-            self.DisplayOptions(self.wrf_namelist)
-        elif sel == 7:
             NamelistContainer.UserSetMozFile()
+        elif sel == 7:
+            self.DisplayOptions(self.wrf_namelist)
         elif sel == 8:
             self.DisplayOptions(self.wps_namelist)
         elif sel == 9:

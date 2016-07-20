@@ -40,8 +40,9 @@ if $usempi; then
 fi
 
 cd ../WRFV3/run
-if [ ! "namelist.input" -ef "../../BUILD/CONFIG/namelist.input" ]; then
-    echo "WRFV3/run/namelist.input is not a link to BUILD/CONFIG/namelist.input"
+if [ ! "namelist.input" -ef "$mydir/CONFIG/namelist.input" ]; then
+    echo "WRFV3/run/namelist.input is not a link to"
+    echo " $mydir/CONFIG/namelist.input"
     echo "This should NOT be the case if you have run 'autowrfchem prepinpt'"
     if ! $override; then
         echo "Aborting run. To force the run, use 'autowrfchem run --override'"

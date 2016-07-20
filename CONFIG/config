@@ -1,6 +1,7 @@
 #!/bin/bash
 
-mydir=`dirname $0`
+cd `dirname $0`
+mydir=`pwd -P`
 outfile="$mydir/../wrfbuild.cfg"
 
 # Have the user choose available met 
@@ -26,6 +27,6 @@ metType=${mettypes[$sel]}
 echo "metType=$metType" >> $outfile
 
 echo "Enter the path where the meteorology data is stored."
-echo "You may also skip this and modify BUILD/wrfbuild.cfg later."
+echo "You may also skip this and modify $mydir/wrfbuild.cfg later."
 read metDir
 echo "metDir='$metDir'" >> $outfile

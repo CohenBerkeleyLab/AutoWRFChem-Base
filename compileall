@@ -72,8 +72,9 @@ if $wrfcomp; then
     fi
 else
     echo "  Cannot compile WPS if WRF did not compile. Skipping for"
-    echo "  now. Check the compile logs in BUILD/COMPLOGS to see"
-    echo "  why WRF failed to build and correct that issue before"
+    echo "  now. Check the compile logs in"
+    echo "  $mydir/COMPLOGS"
+    echo "  to see why WRF failed to build and correct that issue before"
     echo "  rerunning 'autowrfchem compile'"
 fi
 
@@ -98,7 +99,8 @@ if $wrfcomp; then
     fi
 else
     echo "  Cannot compile convert_emiss if WRF did not compile."
-    echo "  Skipping for now. Check the compile logs in BUILD/COMPLOGS"
+    echo "  Skipping for now. Check the compile logs in"
+    echo "   $mydir/COMPLOGS"
     echo "  to see why WRF failed to build and correct that issue before"
     echo "  rerunning 'autowrfchem compile'"
 fi
