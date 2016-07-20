@@ -6,7 +6,7 @@ mydir=`pwd -P`
 
 # Do a quick check of the most important namelist options
 # before starting the prep
-PREPINPT/precheck
+PREPINPUT/precheck
 chkexit=$?
 if [ $chkexit -ne 0 ]; then
     exit $chkexit
@@ -18,31 +18,31 @@ fi
 # = 2+4+8+16+32 = 62
 exitstat=62
 
-PREPINPT/prepwps
+PREPINPUT/prepwps
 wpsexit=$?
 if [ $wpsexit -eq 0 ]; then
     exitstat=$((exitstat-2))
 fi
 
-PREPINPT/prepnei_intermediate
+PREPINPUT/prepnei_intermediate
 neiexit=$?
 if [ $neiexit -eq 0 ]; then
     exitstat=$((exitstat-4))
 fi
 
-PREPINPT/prepnei_convert
+PREPINPUT/prepnei_convert
 conv.gexit=$?
 if [ $conv.gexit -eq 0 ]; then
     exitstat=$((exitstat-8))
 fi
 
-PREPINPT/prepmegan
+PREPINPUT/prepmegan
 meganexit=$?
 if [ $meganexit -eq 0 ]; then
     exitstat=$((exitstat-16))
 fi
 
-PREPINPT/prepmozbc
+PREPINPUT/prepmozbc
 mozbcexit=$?
 if [ $mozbcexit -eq 0 ]; then
     exitstat=$((exitstat-32))
