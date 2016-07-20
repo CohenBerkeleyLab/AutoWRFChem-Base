@@ -489,7 +489,8 @@ class NamelistContainer:
             raw_input("Press ENTER to continue")
             return None
 
-        mozFiles = glob(os.path.join(mozDataDir, "*.nc"))
+        tmp = glob(os.path.join(mozDataDir, "*.nc"))
+        mozFiles = [os.path.basename(f) for f in tmp]
         if len(mozFiles) < 1:
             print("No MOZBC data files present! You need to download some.")
             print("As of 20 Jul 2016, they can be obtained at")
@@ -507,6 +508,9 @@ class NamelistContainer:
             print("later.")
             raw_input("Press ENTER to continue")
             return None
+        else:
+            # This is what will have to go in the MOZBC input file
+            newMozFilename = "../data/"+newMozFilename
         
         wroteMoz=False
         with open(NamelistContainer.cfg_fname, 'w') as cfgw:
