@@ -37,6 +37,55 @@ if [ $optchk -ne 0 ]; then
     badopts=true
 fi
 
+# Make sure that the met directory exists as does the mozbc file and the 
+# MEGAN and NEI data
+. "$mydir/../wrfbuild.cfg" # source the file with metDir and mozbcFile in it
+
+# Check the met directory from WPS since that's where it'll be called from
+cd ../../WPS
+if [ ! -d "$metDir" ]; then
+    echo ""
+    echo "The directory supposedly containing the meteorology data"
+    echo "(metDir = $metDir)"
+    echo "does not exist. Fix it in $mydir/../wrfbuild.cfg."
+    badopts=true
+fi
+
+cd ../NEI
+ls 2011/area4k >& /dev/null
+areatst=$?
+ls 2011/point >& /dev/null
+pointtst=$?
+if [ $areatst -ne 0 -o $pointtst -ne 0 ]; then
+    echo ""
+    echo "Could not find 2011/area4k and/or 2011/point in NEI."
+    echo "Is the directory 2011 present or linked there?"
+    echo "Does it contain area4k and point as immediate subdirectories?"
+    badopts=true
+fi
+# Check 2005 under certain conditions?
+
+cd ../MEGAN
+ls data/lai* >& /dev/null
+megtst=$?
+if [ $megtst -ne 0 ]; then
+    echo ""
+    echo "Could not find any lai* files under data/ in MEGAN."
+    echo "Is data a directory in MEGAN that contains the MEGAN data,"
+    echo "or a link to such a directory?"
+    badopts=true
+fi
+
+# Now check the MOZBC file
+cd ../MOZBC
+if [ ! -f "data/$mozbcFile" ]; then
+    echo ""
+    echo "Cannot find data/$mozbcFile"
+    echo "from the MOZBC directory. Is the data directory or link present?"
+    echo "If so, is the file directly in that directory (not a subdirectory?)"
+    badopts=true
+fi
+
 if $badopts; then
     exit 1
 else

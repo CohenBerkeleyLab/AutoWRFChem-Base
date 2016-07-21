@@ -88,3 +88,9 @@ if [ ! -e WPS -o ! -e NEI -o ! -e MEGAN -o ! -e MOZBC ]; then
         echo "You have chosen not to clone the various components. They must still be provided for autowrfchem to work."
     fi
 fi
+
+if [ ! -e WRFV3 ]; then
+    echo "Remember, WRFV3 must be a directory at this level, and it must contain a run subdirectory."
+fi
+
+exit 0

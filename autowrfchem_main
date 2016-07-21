@@ -19,6 +19,7 @@ envvaroverride=false
 docompile=false
 doclean=false
 doprepinpt=false
+docheckonly=false
 dorun=false
 while [ $# -gt 0 ]; do
     case $1 in
@@ -43,6 +44,8 @@ while [ $# -gt 0 ]; do
         echo "        compile."
         echo "    ./$myname prepinpt : will prepare meteorology, NEI emissions,"
         echo "        MEGAN emissions, and MOZBC initial and boundary conditions."
+        echo "    ./$myname prepinpt check : will just check that everything required"
+        echo "        for preparing the input data is ready to go."
         echo "    ./$myname run : will run WRF-Chem. This will first check"
         echo "        that the WRF namelist.input file matches what was configured"
         echo "        by ./$myname config."
@@ -60,6 +63,13 @@ while [ $# -gt 0 ]; do
         echo "  means emiss_v0x, megan_bio_emiss, and mozbc all failed to compile."
         echo "  The codes are the same for prepinpt, except that the first bit will never"
         echo "  be set."
+        echo ""
+        echo "  If your cluster has the concept of 'login' vs. 'compute' nodes, i.e. nodes"
+        echo "  expected to be used only for light tasks (login) and those for heavy computing"
+        echo "  (compute) then 'config', 'clean', and 'prepinpt check' can be safely run on"
+        echo "  login-type nodes, but all other modes (including regular prepinpt) should be"
+        echo "  run on compute-type nodes. ('compile' is a possible exception, if you normally"
+        echo "  do compilation on a login-type node, this should be fine.)"
         echo ""
         echo "  Note that this utility is only set up to handle one domain currently."
         echo ""
@@ -82,6 +92,9 @@ while [ $# -gt 0 ]; do
         ;;
     prepinpt)
         doprepinpt=true
+        ;;
+    check)
+        docheckonly=true
         ;;
     run)
         dorun=true
@@ -142,7 +155,11 @@ if $docompile; then
     exit $compexit
 fi
 if $doprepinpt; then
-    $mydir/prepinpt
+    if $docheckonly; then
+        $mydir/prepinpt --check-only
+    else
+        $mydir/prepinpt
+    fi
     exit $?
 fi
 if $dorun; then

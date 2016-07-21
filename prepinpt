@@ -4,12 +4,22 @@ mydir=`dirname $0`
 cd $mydir
 mydir=`pwd -P`
 
+if [ "$1" == "--check-only" ]; then
+    checkonly=true
+else
+    checkonly=false
+fi
+
 # Do a quick check of the most important namelist options
 # before starting the prep
 PREPINPUT/precheck
 chkexit=$?
 if [ $chkexit -ne 0 ]; then
     exit $chkexit
+fi
+
+if $checkonly; then
+    exit 0
 fi
 
 # The exit status needs to be 0 if everything works,
