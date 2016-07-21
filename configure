@@ -68,7 +68,6 @@ python CONFIG/autowrf_namelist_main.py
 # the WPS namelist as well)
 cd ../WRFV3/run
 if [ -e namelist.input -o -L namelist.input ]; then
-    echo "Moving namelist.input to backup"
     mv namelist.input namelist.input.autowrf-backup
 fi
 ln -s $mydir/CONFIG/namelist.input

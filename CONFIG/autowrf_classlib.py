@@ -508,9 +508,6 @@ class NamelistContainer:
             print("later.")
             raw_input("Press ENTER to continue")
             return None
-        else:
-            # This is what will have to go in the MOZBC input file
-            newMozFilename = "../data/"+newMozFilename
         
         wroteMoz=False
         with open(NamelistContainer.cfg_fname, 'w') as cfgw:

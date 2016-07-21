@@ -16,8 +16,14 @@ mydir=`pwd -P`
 pyprog="$mydir/../CONFIG/autowrf_namelist_main.py"
 chemopt=`python $pyprog get-wrf-opt --chem_opt`
 
-if [ -z "$chem" ]; then
+if [ -z "$chemopt" ]; then
     echo "Failed to obtain the value of chem_opt. I do not know why that happened."
+    exit 1
+fi
+
+. "$mydir/../wrfbuild.cfg" # this will get the variable mozbcFile
+if [ -z $mozbcFile ]; then
+    echo "No mozbc file set in wrfbuild.cfg! Use autowrfchem config namelist to choose one."
     exit 1
 fi
 
@@ -60,6 +66,12 @@ if [ ! -f "$mozfile" ]; then
     exit 1
 fi
 
+# Modify the input file to have the proper data file
+oldline=`grep -- "fn_moz" "$mozfile"`
+newline="fn_moz = '$mozbcFile'"
+
+perl -pi -e "s/$oldline/$newline/g" $mozfile
+
 cd ../../WRFV3/run
 # Ensure that the namelist is back to the regular options
 python $pyprog tempmod
@@ -73,7 +85,7 @@ if [ ! -f "wrfbiochemi_d01" ]; then
     echo "wrfbiochemi_d01 is not present in run directory"
     missingfiles=true
 fi
-if $missingfiles
+if $missingfiles; then
     exit 1
 fi
 
