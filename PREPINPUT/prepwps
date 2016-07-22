@@ -17,9 +17,7 @@ mydir=`pwd -P`
 #### WPS ####
 #############
 
-wpsDir="$AUTOWRFDIR/WPS"
-
-cd $wpsDir
+cd "$mydir/../../WPS"
 
 # Ensure that the WPS namelist is linked to the one in the CONFIG folder
 if [ -e namelist.wps ]; then
@@ -71,10 +69,10 @@ if [ $ggexit != 0 ]; then
 fi
 
 # Then ungrib. Need to link the met data first
-./linkgrib.csh $metDir/$metType
+./link_grib.csh $metDir/$metType
 lnkexit=$?
 if [ $lnkexit != 0 ]; then
-    echo "LINKGRIB.CSH failed with exit code $lnkexit"
+    echo "LINK_GRIB.CSH failed with exit code $lnkexit"
     exit 1
 fi
 ./ungrib.exe >& "$mydir/../PREPLOGS/ungrib.log"

@@ -54,7 +54,7 @@ if [ ! -e WPS -o ! -e NEI -o ! -e MEGAN -o ! -e MOZBC ]; then
         echo "You will need to enter the password for RCCohenLab on the fileserver for each repo (sorry)"
         
         if [ ! -e WPS ]; then
-            git clone RCCohenLab@${rootrepo}/WPS351.git WPS
+            git clone RCCohenLab@${rootrepo}/WPS.git WPS
             # Have the user choose the WPS version
             cd WPS
             echo "Choose the WPS version:"

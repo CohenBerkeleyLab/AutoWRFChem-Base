@@ -8,3 +8,6 @@
 CONFIG/namelist.input
 CONFIG/namelist.wps
 CONFIG/namelist_pickle.pkl
+# Ignore logs
+COMPLOGS/*
+PREPLOGS/*

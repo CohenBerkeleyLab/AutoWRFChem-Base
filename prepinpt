@@ -1,14 +1,23 @@
 #!/bin/bash
 
 mydir=`dirname $0`
-cd $mydir
+cd "$mydir"
 mydir=`pwd -P`
 
-if [ "$1" == "--check-only" ]; then
-    checkonly=true
-else
-    checkonly=false
-fi
+checkonly=false
+finishonly=false
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --check-only)
+        checkonly=true
+        ;;
+        --finish-only)
+        finishonly=true
+        ;;
+    esac
+    shift
+done
 
 # Do a quick check of the most important namelist options
 # before starting the prep
@@ -22,41 +31,102 @@ if $checkonly; then
     exit 0
 fi
 
+if $finishonly; then
+    cd ../WPS
+    ls met_em* >& /dev/null
+    if [ $? -eq 0 ]; then
+        # Met files exist in WPS, no need to redo
+        dowps=false
+    else
+        dowps=true
+    fi
+
+    cd ../WRFV3/run
+    if [ -f wrfem_00to12Z -a -f wrfem_12to24Z ]; then
+        doemiss=false
+    else
+        doemiss=true
+    fi
+
+    if [ -f wrfchemi_00z_d01 -a -f wrfchemi_12z_d01 ]; then
+        doconv=false
+    else
+        doconv=true
+    fi
+
+    if [ -f wrfbiochemi_d01 ]; then
+        domegan=false
+    else
+        domegan=true
+    fi
+    cd "$mydir"
+else
+    dowps=true
+    doemiss=true
+    doconv=true
+    domegan=true
+fi
+
 # The exit status needs to be 0 if everything works,
 # otherwise have bits representing which one failed
 # start as 011111 and remove 1's as things succeed
 # = 2+4+8+16+32 = 62
 exitstat=62
 
-PREPINPUT/prepwps
-wpsexit=$?
-if [ $wpsexit -eq 0 ]; then
+if $dowps; then
+    echo "Running WPS..."
+    PREPINPUT/prepwps
+    wpsexit=$?
+    if [ $wpsexit -eq 0 ]; then
+        exitstat=$((exitstat-2))
+    fi
+else
+    echo "Met files detected, skipping WPS."
     exitstat=$((exitstat-2))
-fi
+fi 
 
-PREPINPUT/prepnei_intermediate
-neiexit=$?
-if [ $neiexit -eq 0 ]; then
+if $doemiss; then
+    echo "Running emiss_v04..."
+    PREPINPUT/prepnei_intermediate
+    neiexit=$?
+    if [ $neiexit -eq 0 ]; then
+        exitstat=$((exitstat-4))
+    fi
+else
+    echo "wrfem files found, skipping emiss_v04"
     exitstat=$((exitstat-4))
 fi
 
-PREPINPUT/prepnei_convert
-conv.gexit=$?
-if [ $conv.gexit -eq 0 ]; then
+
+if $doconv; then
+    echo "Running convert_emiss.exe"
+    PREPINPUT/prepnei_convert
+    convexit=$?
+    if [ $convexit -eq 0 ]; then
+        exitstat=$((exitstat-8))
+    fi
+else
+    echo "wrfchemi files detected, skipping convert_emiss.exe"
     exitstat=$((exitstat-8))
 fi
-
-PREPINPUT/prepmegan
-meganexit=$?
-if [ $meganexit -eq 0 ]; then
+    
+if $domegan; then
+    echo "Running MEGAN"
+    PREPINPUT/prepmegan
+    meganexit=$?
+    if [ $meganexit -eq 0 ]; then
+        exitstat=$((exitstat-16))
+    fi
+else
+    echo "wrfbiochemi file found, skipping MEGAN"
     exitstat=$((exitstat-16))
 fi
-
+    
+echo "Running MOZBC..."
 PREPINPUT/prepmozbc
 mozbcexit=$?
 if [ $mozbcexit -eq 0 ]; then
     exitstat=$((exitstat-32))
 fi
-
 
 exit $exitstat

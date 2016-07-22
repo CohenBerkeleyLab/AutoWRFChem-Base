@@ -20,7 +20,9 @@ docompile=false
 doclean=false
 doprepinpt=false
 docheckonly=false
+dofinishonly=false
 dorun=false
+runargs=""
 while [ $# -gt 0 ]; do
     case $1 in
     -h|--help)
@@ -96,9 +98,14 @@ while [ $# -gt 0 ]; do
     check)
         docheckonly=true
         ;;
+    finish)
+        dofinishonly=true
+        ;;
     run)
         dorun=true
         ;;
+    --ntasks=*)
+        runargs="$runargs $1"
     esac
     shift
 done
@@ -155,15 +162,19 @@ if $docompile; then
     exit $compexit
 fi
 if $doprepinpt; then
+    prepargs=""
     if $docheckonly; then
-        $mydir/prepinpt --check-only
-    else
-        $mydir/prepinpt
+        prepargs="$prepargs --check-only"
     fi
+    if $dofinishonly; then
+        prepargs="$prepargs --finish-only"
+    fi
+    
+    $mydir/prepinpt $prepargs
     exit $?
 fi
 if $dorun; then
-    $mydir/runwrf
+    $mydir/runwrf $runargs
     exit $?
 fi
 
