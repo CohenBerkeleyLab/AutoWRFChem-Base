@@ -18,6 +18,7 @@ namelistonly=false
 envvaroverride=false
 docompile=false
 doclean=false
+cleaninput=false
 doprepinpt=false
 docheckonly=false
 dofinishonly=false
@@ -44,13 +45,17 @@ while [ $# -gt 0 ]; do
         echo "        it finds an existing .exe file."
         echo "    ./$myname clean : will remove all compiled files for a clean"
         echo "        compile."
+        echo "    ./$myname clean input : will clean up the input files instead."
+        echo "        It does not clean the code."
         echo "    ./$myname prepinpt : will prepare meteorology, NEI emissions,"
         echo "        MEGAN emissions, and MOZBC initial and boundary conditions."
         echo "    ./$myname prepinpt check : will just check that everything required"
         echo "        for preparing the input data is ready to go."
         echo "    ./$myname run : will run WRF-Chem. This will first check"
         echo "        that the WRF namelist.input file matches what was configured"
-        echo "        by ./$myname config."
+        echo "        by ./$myname config. If running WRF-Chem in parallel, must pass"
+        echo "        the number of tasks to start (x) as --ntasks=x. If running in"
+        echo "        serial, must pass the flag --nompi instead"
         echo ""
         echo ""
         echo "  Exit codes for the compile and prepinpt steps will indicate which step"
@@ -92,6 +97,9 @@ while [ $# -gt 0 ]; do
     clean)
         doclean=true
         ;;
+    input)
+        cleaninput=true
+        ;;
     prepinpt)
         doprepinpt=true
         ;;
@@ -106,6 +114,14 @@ while [ $# -gt 0 ]; do
         ;;
     --ntasks=*)
         runargs="$runargs $1"
+        ;;
+    --nompi)
+        runargs="$runargs $1"
+        ;;
+    *)
+        echo "$1 is not a recognized option"
+        exit 1
+        ;;
     esac
     shift
 done
@@ -148,7 +164,11 @@ if $doconfig; then
     exit $configexit
 fi
 if $doclean; then
-    $mydir/cleanall
+    if $cleaninput; then
+        $mydir/cleanall --input
+    else
+        $mydir/cleanall
+    fi
     exit $?
 fi
 if $docompile; then

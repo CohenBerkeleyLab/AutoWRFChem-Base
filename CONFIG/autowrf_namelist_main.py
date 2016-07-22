@@ -12,6 +12,9 @@ def DomainsPath():
 def NamelistsPath():
     return os.path.join(os.path.dirname(__file__), "NAMELISTS")
 
+def MyPath():
+    return os.path.dirname(__file__)
+
 def Startup():
     # Check if the DOMAINS and NAMELISTS subfolders exist already,
     # create them if not
@@ -330,7 +333,9 @@ if __name__ == "__main__":
                 nlc.SavePickle()
 
         elif "check" in arg[1]:
-            nlc = WRF.NamelistContainer.LoadPickle()
+            wrf_namelist = os.path.join(MyPath(), "namelist.input")
+            wps_namelist = os.path.join(MyPath(), "namelist.wps")
+            nlc = WRF.NamelistContainer(wrffile=wrf_namelist, wpsfile=wps_namelist)
             if "wrf" in arg[1]:
                 namelist = nlc.wrf_namelist
             elif "wps" in arg[1]:
@@ -366,7 +371,9 @@ if __name__ == "__main__":
                     exit(1)
             exit(0)
         elif "get" in arg[1]:
-            nlc = WRF.NamelistContainer.LoadPickle()
+            wrf_namelist = os.path.join(MyPath(), "namelist.input")
+            wps_namelist = os.path.join(MyPath(), "namelist.wps")
+            nlc = WRF.NamelistContainer(wrffile=wrf_namelist, wpsfile=wps_namelist)
             if "wrf" in arg[1]:
                 namelist = nlc.wrf_namelist
             elif "wps" in arg[1]:
@@ -376,12 +383,22 @@ if __name__ == "__main__":
                 eprint("(neither 'wrf' nor 'wps' was found in the flag)")
                 exit(1)
 
+            if "--no-quotes" in arg:
+                noquote=True
+                arg.remove("--no-quotes")
+            else:
+                noquote=False
+
             optname = arg[2].replace("-", "")
             if not namelist.IsOptInNamelist(optname):
                 eprint("Could not find '{0}' in specified namelist".format(optname))
                 exit(1)
             else:
-                print(namelist.GetOptValNoSect(optname,domainnum=1))
+                val=namelist.GetOptValNoSect(optname,domainnum=1)
+                if noquote:
+                    val=val.replace("'","")
+
+                print(val)
         else:
             eprint("Command '{0}' not recognized".format(arg[1]))
             exit(1)
@@ -444,6 +461,11 @@ if __name__ == "__main__":
 #       you wish to allow the option to be one of several values, separate each with a comma, i.e
 #       --io_form_auxinput5=2,11 will return 0 if io_form_auxinput5 is 2 or 11.
 #
-#   python autowrf_namelist_main.py check-wps-opt: same as check_wrf_opt but for WPS.
+#   python autowrf_namelist_main.py check-wps-opt: same as check-wrf-opt but for WPS.
+#
+#   python autowrf_namelist_main.py get-wrf-opt: will return the value of the WRF namelist option specified using the
+#       same syntax as check-wrf-opt. Additionally, the flag --no-quotes will strip any ' characters from the string first.
+#
+#   python autowrf_namelist_main.py get-wps-opt: same as get-wrf-opt but for WPS.
 #
 # ENDDOC

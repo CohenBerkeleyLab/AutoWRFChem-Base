@@ -4,19 +4,46 @@ mydir=`dirname $0`
 cd $mydir
 mydir=`pwd -P` # make the path absolute rather than relative
 
-cd ../WRFV3
-./clean -a
+if [ "$1" == "--input" ]; then
+    cleaninpt=true
+else
+    cleaninpt=false
+fi
 
-cd ../WPS
-./clean
+if $cleaninpt; then
+    cd ../WRFV3/run
+    rm -f met_em*
+    rm -f wrfbiochemi*
+    rm -f wrfchemi*
+    rm -f wrfem*
+    rm -f wrfbdy*
+    rm -f wrfinput*
 
-# currently only the version 4 NEI gridding code has a Makefile
-cd ../NEI/src/v04
-make clean
+    cd ../../WPS
+    rm -f met_em*
 
-cd ../../../MEGAN/src/
-rm megan_bio_emiss
-make clean
+    cd ../NEI/src/v04
+    rm -f wrfem*
 
-cd ../../MOZBC/src
-make clean
+    cd ../../../MEGAN/src
+    rm -f wrfbiochemi*
+else
+
+    cd ../WRFV3
+    ./clean -a
+
+    cd ../WPS
+    ./clean
+
+    # currently only the version 4 NEI gridding code has a Makefile
+    cd ../NEI/src/v04
+    make clean
+
+    cd ../../../MEGAN/src/
+    rm megan_bio_emiss
+    make clean
+
+    cd ../../MOZBC/src
+    make clean
+
+fi

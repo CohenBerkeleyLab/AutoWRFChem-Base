@@ -50,6 +50,27 @@ if [ ! -d "$metDir" ]; then
     echo "does not exist. Fix it in $mydir/../wrfbuild.cfg."
     badopts=true
 fi
+# Also check the geog_data_path and constants file
+geogpath="`python $pyprog get-wps-opt --no-quotes --geog_data_path`"
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "The option 'geog_data_path' is not specified in the WPS namelist, and it should be."
+    badopts=true
+elif [ ! -d "$geogpath" ]; then
+    echo ""
+    echo "The WPS geog_data_path $geogpath is not a directory."
+    badopts=true
+fi
+constfile="`python $pyprog get-wps-opt --no-quotes --constants_name`"
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "The option 'constants_name' is not specified in the WPS namelist, and it should be."
+    badopts=true
+elif [ ! -f "$constfile" ]; then
+    echo ""
+    echo "The WPS constants files $constfile does not exist."
+    badopts=true
+fi
 
 cd ../NEI
 ls 2011/area4k >& /dev/null

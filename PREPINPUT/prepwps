@@ -6,9 +6,10 @@
 mydir=$(dirname $0) # always find this directory, which should be PREPINPUT
 cd $mydir
 mydir=`pwd -P`
+pyprog="$mydir/../CONFIG/autowrf_namelist_main.py"
 # This must contain definitions of the variables
 # metType and metDir. metType must match the ungrib
-# Vtable name
+# Vtable name. Source both.
 . "$mydir/../wrfbuild.cfg"
 # This ensures all necessary env. vars. are set
 . "$mydir/../envvar_wrfchem.cfg"
@@ -90,6 +91,11 @@ if [ $mgexit != 0 ]; then
     echo "METGRID.EXE failed with exit code $mgexit"
     exit 1
 fi
+
+# Remove the intermediate files
+rm -f GRIBFILE*
+prefix="`python $pyprog get-wps-opt --no-quotes --prefix`"
+rm -f "${prefix}"*
 
 # Now go over to the run directory and link this meteorology
 cd ../WRFV3/run

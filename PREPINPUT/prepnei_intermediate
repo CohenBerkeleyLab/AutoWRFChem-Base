@@ -38,4 +38,8 @@ cd ../../../WRFV3/run
 ln -sf wrfem_00to12Z wrfem_00to12z_d01
 ln -sf wrfem_12to24Z wrfem_12to24z_d01
 
+# Link the output to make it easier to find
+cd "$mydir/../PREPLOGS"
+ln -sf ../../NEI/src/v04/al2radm2.outp emiss.log
+
 exit 0
