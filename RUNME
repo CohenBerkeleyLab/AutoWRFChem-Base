@@ -33,7 +33,7 @@ if $doexit; then
     exit 1
 fi
 
-rootrepo="128.32.208.13:/volume2/share2/GROUP/MODELING/WRF-Chem/Auto-WRF-Chem"
+rootrepo="https://github.com/CohenBerkeleyLab"
 
 # These two arrays will be used in selecting the WPS version. The first is used to print out
 # the menu options. The second should correspond to the remote branch name containing that version
@@ -51,10 +51,9 @@ if [ ! -e WPS -o ! -e NEI -o ! -e MEGAN -o ! -e MOZBC ]; then
     echo "One or more of these is missing; would you like to clone the missing ones automatically?"
     read -p "Enter y or n: " userans
     if [ "$userans" == "y" -o "$userans" == "Y" ]; then
-        echo "You will need to enter the password for RCCohenLab on the fileserver for each repo (sorry)"
         
         if [ ! -e WPS ]; then
-            git clone RCCohenLab@${rootrepo}/WPS.git WPS
+            git clone ${rootrepo}/WPS.git WPS
             # Have the user choose the WPS version
             cd WPS
             echo "Choose the WPS version:"
@@ -74,15 +73,15 @@ if [ ! -e WPS -o ! -e NEI -o ! -e MEGAN -o ! -e MOZBC ]; then
         fi
 
         if [ ! -e NEI ]; then
-            git clone RCCohenLab@${rootrepo}/NEI.git NEI
+            git clone ${rootrepo}/NEI.git NEI
         fi
 
         if [ ! -e MEGAN ]; then
-            git clone RCCohenLab@${rootrepo}/MEGAN.git MEGAN
+            git clone ${rootrepo}/MEGAN.git MEGAN
         fi
 
         if [ ! -e MOZBC ]; then
-            git clone RCCohenLab@${rootrepo}/MOZBC.git MOZBC
+            git clone ${rootrepo}/MOZBC.git MOZBC
         fi
     else
         echo "You have chosen not to clone the various components. They must still be provided for autowrfchem to work."
