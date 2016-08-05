@@ -210,6 +210,20 @@ def SplitOpt(opt):
     else:
         return sopt[0], sopt[1]
 
+def CheckNamelists(wrf_nl, wps_nl):
+    a_ok = True
+    if not os.path.isfile(wrf_nl):
+        eprint("namelist.input does not exist in {0}".format(MyPath()))
+        a_ok = False
+    if not os.path(wps_nl):
+        eprint("namelist.wps does not exist in {0}".format(MyPath()))
+        a_ok = False
+
+    if not a_ok:
+        exit(1)
+    else:
+        return
+
 #### MAIN PROGRAM ####
 # Call startup regardless of if we are running as the main program or as a module
 Startup()
@@ -335,6 +349,10 @@ if __name__ == "__main__":
         elif "check" in arg[1]:
             wrf_namelist = os.path.join(MyPath(), "namelist.input")
             wps_namelist = os.path.join(MyPath(), "namelist.wps")
+
+            # Verify that the namelists exist
+            CheckNamelists(wrf_namelist, wps_namelist)
+
             nlc = WRF.NamelistContainer(wrffile=wrf_namelist, wpsfile=wps_namelist)
             if "wrf" in arg[1]:
                 namelist = nlc.wrf_namelist
@@ -373,6 +391,10 @@ if __name__ == "__main__":
         elif "get" in arg[1]:
             wrf_namelist = os.path.join(MyPath(), "namelist.input")
             wps_namelist = os.path.join(MyPath(), "namelist.wps")
+
+            # Verify that the namelists exist
+            CheckNamelists(wrf_namelist, wps_namelist)
+            
             nlc = WRF.NamelistContainer(wrffile=wrf_namelist, wpsfile=wps_namelist)
             if "wrf" in arg[1]:
                 namelist = nlc.wrf_namelist
