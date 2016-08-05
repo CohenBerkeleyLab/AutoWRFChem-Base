@@ -526,6 +526,10 @@ class NamelistContainer:
             return
 
         k = namelist.opts[sect].keys()
+        if len(k) == 0:
+            print("{0} has no options".format(sect))
+            return
+        
         optslist = [o for o in k if o not in self.domain_opts and o not in self.met_opts]
         opt = UI.UserInputList("Choose the option to modify: ", optslist)
         if opt is None:
@@ -712,7 +716,8 @@ class UI:
             except ValueError:
                 print("Input invalid")
             else:
-                break
+                if userans > 0 and userans <= len(options):
+                    break
 
         if returntype.lower() == "value":
             return options[userans-1]
