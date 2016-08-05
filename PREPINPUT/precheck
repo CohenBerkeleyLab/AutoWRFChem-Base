@@ -1,5 +1,16 @@
 #!/bin/bash
 
+# Input Parsing
+
+metonly=false
+if [ ! -z "$1" ] && [ "$1" == "--met-only" ]; then
+    metonly=true
+fi
+
+# End Input parsing
+
+
+# Reference this script
 cd `dirname $0`
 mydir=`pwd -P`
 
@@ -13,33 +24,40 @@ fi
 # Verify that the settings needed for NEI and MEGAN are present in the current namelist
 badopts=false
 
-# Check various options needed for NEI to work
-python $pyprog check-wrf-opt --io_form_auxinput5=2,11 --io_style_emissions=1 --emiss_inpt_opt=1
-optchk=$?
-if [ $optchk -gt 0 ]; then
-    echo ""
-    echo "One or more of the namelist options expected if using NEI are incorrect."
-    echo "Run 'autowrfchem config namelist' and use the NEI compatibility checker"
-    echo "on the current namelist."
-    badopts=true
-fi
+if ! $metonly; then
+    # Check various options needed for NEI to work
+    python $pyprog check-wrf-opt --io_form_auxinput5=2,11 --io_style_emissions=1 --emiss_inpt_opt=1
+    optchk=$?
+    if [ $optchk -gt 0 ]; then
+        echo ""
+        echo "One or more of the namelist options expected if using NEI are incorrect."
+        echo "Run 'autowrfchem config namelist' and use the NEI compatibility checker"
+        echo "on the current namelist."
+        badopts=true
+    fi
 
-# Do the same for MEGAN
-python $pyprog check_wrf_opt --io_form_auxinput6=2,11 --bio_emiss_opt=3
-optchk=$?
-if [ $optchk -ne 0 ]; then
-    echo ""
-    echo "To use MEGAN for biogenic emissions, you must have io_form_auxinput6 set"
-    echo "to 2 or 11 under the &time_control section of the WRF namelist (11 will"
-    echo "only work if parallel netCDF is installed) and bio_emiss_opt set to 3"
-    echo "under the &chem section of the namelist. One or both of these is not"
-    echo "true. Correct them and rerun the input preparation."
-    badopts=true
+    # Do the same for MEGAN
+    python $pyprog check_wrf_opt --io_form_auxinput6=2,11 --bio_emiss_opt=3
+    optchk=$?
+    if [ $optchk -ne 0 ]; then
+        echo ""
+        echo "To use MEGAN for biogenic emissions, you must have io_form_auxinput6 set"
+        echo "to 2 or 11 under the &time_control section of the WRF namelist (11 will"
+        echo "only work if parallel netCDF is installed) and bio_emiss_opt set to 3"
+        echo "under the &chem section of the namelist. One or both of these is not"
+        echo "true. Correct them and rerun the input preparation."
+        badopts=true
+    fi
 fi
 
 # Make sure that the met directory exists as does the mozbc file and the 
 # MEGAN and NEI data
-. "$mydir/../wrfbuild.cfg" # source the file with metDir and mozbcFile in it
+if [ -f "$mydir/../wrfbuild.cfg" ]; then
+    . "$mydir/../wrfbuild.cfg" # source the file with metDir and mozbcFile in it
+else
+    echo "wrfbuild.cfg does not exist. Run autowrfchem config at least once to generate it."
+    exit 1
+fi
 
 # Check the met directory from WPS since that's where it'll be called from
 cd ../../WPS
@@ -50,6 +68,7 @@ if [ ! -d "$metDir" ]; then
     echo "does not exist. Fix it in $mydir/../wrfbuild.cfg."
     badopts=true
 fi
+
 # Also check the geog_data_path and constants file
 geogpath="`python $pyprog get-wps-opt --no-quotes --geog_data_path`"
 if [ $? -ne 0 ]; then
@@ -72,39 +91,41 @@ elif [ ! -f "$constfile" ]; then
     badopts=true
 fi
 
-cd ../NEI
-ls 2011/area4k >& /dev/null
-areatst=$?
-ls 2011/point >& /dev/null
-pointtst=$?
-if [ $areatst -ne 0 -o $pointtst -ne 0 ]; then
-    echo ""
-    echo "Could not find 2011/area4k and/or 2011/point in NEI."
-    echo "Is the directory 2011 present or linked there?"
-    echo "Does it contain area4k and point as immediate subdirectories?"
-    badopts=true
-fi
-# Check 2005 under certain conditions?
+if ! $metonly; then
+    cd ../NEI
+    ls 2011/area4k >& /dev/null
+    areatst=$?
+    ls 2011/point >& /dev/null
+    pointtst=$?
+    if [ $areatst -ne 0 -o $pointtst -ne 0 ]; then
+        echo ""
+        echo "Could not find 2011/area4k and/or 2011/point in NEI."
+        echo "Is the directory 2011 present or linked there?"
+        echo "Does it contain area4k and point as immediate subdirectories?"
+        badopts=true
+    fi
+    # Check 2005 under certain conditions?
 
-cd ../MEGAN
-ls data/lai* >& /dev/null
-megtst=$?
-if [ $megtst -ne 0 ]; then
-    echo ""
-    echo "Could not find any lai* files under data/ in MEGAN."
-    echo "Is data a directory in MEGAN that contains the MEGAN data,"
-    echo "or a link to such a directory?"
-    badopts=true
-fi
+    cd ../MEGAN
+    ls data/lai* >& /dev/null
+    megtst=$?
+    if [ $megtst -ne 0 ]; then
+        echo ""
+        echo "Could not find any lai* files under data/ in MEGAN."
+        echo "Is data a directory in MEGAN that contains the MEGAN data,"
+        echo "or a link to such a directory?"
+        badopts=true
+    fi
 
-# Now check the MOZBC file
-cd ../MOZBC
-if [ ! -f "data/$mozbcFile" ]; then
-    echo ""
-    echo "Cannot find data/$mozbcFile"
-    echo "from the MOZBC directory. Is the data directory or link present?"
-    echo "If so, is the file directly in that directory (not a subdirectory?)"
-    badopts=true
+    # Now check the MOZBC file
+    cd ../MOZBC
+    if [ ! -f "data/$mozbcFile" ]; then
+        echo ""
+        echo "Cannot find data/$mozbcFile"
+        echo "from the MOZBC directory. Is the data directory or link present?"
+        echo "If so, is the file directly in that directory (not a subdirectory?)"
+        badopts=true
+    fi
 fi
 
 if $badopts; then

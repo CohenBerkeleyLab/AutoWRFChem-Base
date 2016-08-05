@@ -215,7 +215,7 @@ def CheckNamelists(wrf_nl, wps_nl):
     if not os.path.isfile(wrf_nl):
         eprint("namelist.input does not exist in {0}".format(MyPath()))
         a_ok = False
-    if not os.path(wps_nl):
+    if not os.path.isfile(wps_nl):
         eprint("namelist.wps does not exist in {0}".format(MyPath()))
         a_ok = False
 

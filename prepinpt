@@ -18,6 +18,7 @@ while [ $# -gt 0 ]; do
         ;;
         --met-only)
         metonly=true
+        pcargs="--met-only"
         ;;
     esac
     shift
@@ -25,7 +26,7 @@ done
 
 # Do a quick check of the most important namelist options
 # before starting the prep
-PREPINPUT/precheck
+PREPINPUT/precheck $pcargs
 chkexit=$?
 if [ $chkexit -ne 0 ]; then
     exit $chkexit
