@@ -36,6 +36,17 @@ if ! $metonly; then
         badopts=true
     fi
 
+    python $pyprog check-wps-opt --map_proj=lambert,polar
+    optchk=$?
+    if [ $optchk -gt 0 ]; then
+        echo ""
+        echo "NEI emissions only work with lambert or polar map projections. If trying to use a different"
+        echo "map projection with custom emissions, you may run autowrfchem prepinpt with the"
+        echo "'met-only' flag, which will only produce meteorology. You will need to supply the"
+        echo "remaining inputs manually."
+        badopts=true
+    fi
+
     # Do the same for MEGAN
     python $pyprog check_wrf_opt --io_form_auxinput6=2,11 --bio_emiss_opt=3
     optchk=$?

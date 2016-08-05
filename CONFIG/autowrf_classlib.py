@@ -622,7 +622,7 @@ class NamelistContainer:
             if UI.UserInputYN("Set it to 1?"):
                 self.wrf_namelist.SetOptValNoSect("emiss_inpt_opt", 1)
 
-    def CmdSetOtherOpt(self, optname, optval):
+    def CmdSetOtherOpt(self, optname, optval, forceWrfOnly=False):
         # This one will be fairly complicated. First, we need to see if the option is one that is shared (domain opts)
         # or one that should not be set directly. After that, we need to figure out which namelist it belongs to, then
         # set it for that namelist. Will also need to check if the setting is a boolean before setting it.
@@ -631,7 +631,8 @@ class NamelistContainer:
         elif optname in self.met_opts:
             raise RuntimeError("Do not set {0} directly, it must be set using the --met option".format(optname))
         elif optname in self.domain_opts:
-            self.wps_namelist.SetOptValNoSect(optname, optval)
+            if not forceWrfOnly:
+                self.wps_namelist.SetOptValNoSect(optname, optval)
             self.wrf_namelist.SetOptValNoSect(optname, optval)
         else:
             sect = self.wps_namelist.FindOptSection(optname)

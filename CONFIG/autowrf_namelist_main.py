@@ -314,7 +314,12 @@ if __name__ == "__main__":
             start_date = None
             end_date = None
             run_time = None
+            force_wrf_only = False
             for a in arg[2:]:
+                if a == "--force-wrf-only":
+                    force_wrf_only = True
+                    continue
+                    
                 optname, optval = SplitOpt(a)
                 if optname == "--start-date":
                     start_date = ParseDateTime(optval)
@@ -326,7 +331,7 @@ if __name__ == "__main__":
                     nlc.SetMet(optval)
                 else:
                     optname = optname.replace("-", "")
-                    nlc.CmdSetOtherOpt(optname, optval)
+                    nlc.CmdSetOtherOpt(optname, optval, forceWrfOnly=force_wrf_only)
 
             if start_date is not None or end_date is not None:
                 nlc.SetTimePeriod(start_date, end_date)
