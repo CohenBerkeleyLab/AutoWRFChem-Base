@@ -470,6 +470,11 @@ class NamelistContainer:
         # First we need two pieces of information: one, if there is a current file, what it is. Two, what files are
         # available.
 
+        if not os.path.isfile(NamelistContainer.cfg_fname):
+            print("wrfbuild.cfg does not exist. You need to run AUTOWRFCHEM CONFIG")
+            print("at least once to generate this file before you can set a MOZBC file.")
+            return None
+
         with open(NamelistContainer.cfg_fname, 'r') as cfgr:
             cfg_lines = cfgr.readlines()
 
@@ -529,7 +534,7 @@ class NamelistContainer:
         if len(k) == 0:
             print("{0} has no options".format(sect))
             return
-        
+
         optslist = [o for o in k if o not in self.domain_opts and o not in self.met_opts]
         opt = UI.UserInputList("Choose the option to modify: ", optslist)
         if opt is None:
