@@ -35,6 +35,10 @@ while [ $# -gt 0 ]; do
         echo "        part of a batch job). It will also set a global namelist"
         echo "        that will ensure WRF, WPS, and NEI are all set to the same"
         echo "        domain."
+        echo "    ./$myname config override : will include the necessary environmental"
+        echo "        variables to run WRF-Chem (EM_CORE=1, WRF_CHEM=1, etc) regardless"
+        echo "        of how those variables are set in your shell. It will NOT modify"
+        echo "        these variables in your shell except when this program is running."
         echo "    ./$myname config namelist : will only reconfigure the"
         echo "        namelist. Useful if you just need to change the domain or"
         echo "        time period."
@@ -153,13 +157,15 @@ if $doconfig; then
     ./configure $configopts # set env vars and all namelist options.
     configexit=$?
 
-    if ! $namelistonly; then
-        echo ""
-        echo "*****************************************************************************"
-        echo "Configuration files generated. Run $myname with 'compile' to begin compilation"
-        echo "*****************************************************************************"
-        echo ""
-    fi   
+    if [ $configexit -eq 0 ]; then
+        if ! $namelistonly; then
+            echo ""
+            echo "*****************************************************************************"
+            echo "Configuration files generated. Run $myname with 'compile' to begin compilation"
+            echo "*****************************************************************************"
+            echo ""
+        fi
+    fi
  
     exit $configexit
 fi
