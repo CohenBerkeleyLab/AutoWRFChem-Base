@@ -21,6 +21,7 @@ doclean=false
 cleaninput=false
 doprepinpt=false
 docheckonly=false
+dometonly=false
 dofinishonly=false
 dorun=false
 runargs=""
@@ -55,6 +56,11 @@ while [ $# -gt 0 ]; do
         echo "        MEGAN emissions, and MOZBC initial and boundary conditions."
         echo "    ./$myname prepinpt check : will just check that everything required"
         echo "        for preparing the input data is ready to go."
+        echo "    ./$myname prepinput met-only : will only prepare met data."
+        echo "    ./$myname prepinput finish : will only prepare inputs that are missing."
+        echo "        Note that this is pretty simple minded with respect to met data, and"
+        echo "        will simply assume that WPS succeeded if ANY met_em files are present"
+        echo "        in WRFV3/run."
         echo "    ./$myname run : will run WRF-Chem. This will first check"
         echo "        that the WRF namelist.input file matches what was configured"
         echo "        by ./$myname config. If running WRF-Chem in parallel, must pass"
@@ -109,6 +115,9 @@ while [ $# -gt 0 ]; do
         ;;
     check)
         docheckonly=true
+        ;;
+    met-only)
+        dometonly=true
         ;;
     finish)
         dofinishonly=true
@@ -191,6 +200,9 @@ if $doprepinpt; then
     prepargs=""
     if $docheckonly; then
         prepargs="$prepargs --check-only"
+    fi
+    if $dometonly; then
+        prepargs="$prepargs --met-only"
     fi
     if $dofinishonly; then
         prepargs="$prepargs --finish-only"

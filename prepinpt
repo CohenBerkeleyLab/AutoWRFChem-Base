@@ -6,6 +6,7 @@ mydir=`pwd -P`
 
 checkonly=false
 finishonly=false
+metonly=false
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -14,6 +15,9 @@ while [ $# -gt 0 ]; do
         ;;
         --finish-only)
         finishonly=true
+        ;;
+        --met-only)
+        metonly=true
         ;;
     esac
     shift
@@ -32,16 +36,16 @@ if $checkonly; then
 fi
 
 if $finishonly; then
-    cd ../WPS
+    cd ../WRFV3/run
+    pwd
     ls met_em* >& /dev/null
     if [ $? -eq 0 ]; then
-        # Met files exist in WPS, no need to redo
+        # Met files linked in WRFV3/run, no need to redo
         dowps=false
     else
         dowps=true
     fi
 
-    cd ../WRFV3/run
     if [ -f wrfem_00to12Z -a -f wrfem_12to24Z ]; then
         doemiss=false
     else
@@ -71,7 +75,11 @@ fi
 # otherwise have bits representing which one failed
 # start as 011111 and remove 1's as things succeed
 # = 2+4+8+16+32 = 62
-exitstat=62
+if $metonly; then
+    exitstat=2
+else
+    exitstat=62
+fi
 
 if $dowps; then
     echo "Running WPS..."
@@ -83,7 +91,11 @@ if $dowps; then
 else
     echo "Met files detected, skipping WPS."
     exitstat=$((exitstat-2))
-fi 
+fi
+
+if $metonly; then
+    exit $exitstat
+fi
 
 if $doemiss; then
     echo "Running emiss_v04..."
