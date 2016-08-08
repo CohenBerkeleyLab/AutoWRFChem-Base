@@ -798,7 +798,7 @@ class UI:
             return dateout
 
     @staticmethod
-    def UserInputValue( optname, isbool=False, currval=None):
+    def UserInputValue( optname, isbool=False, currval=None, noempty=False):
         # Allows user to input a value simply. The isbool keyword input allows this function to behave differently if
         # the option is a boolean, since those options must be given as .true. or .false.
         # As with others, a value for currval will print the current value
@@ -807,8 +807,8 @@ class UI:
         if currval is not None:
             print("The current value is {0}".format(currval))
 
-        if isbool:
-            while True:
+        while True:
+            if isbool:
                 userans = raw_input("T/F: ").lower().strip()
                 if userans == "t":
                     return ".true."
@@ -818,23 +818,25 @@ class UI:
                     return None
                 else:
                     print("Option is a boolean. Must enter T or F.")
-        else:
-            userans = raw_input("--> ").strip()
-            if len(userans) == 0:
-                return None
             else:
-                return userans
+                userans = raw_input("--> ").strip()
+                if len(userans) == 0 and not noempty:
+                    return None
+                elif len(userans) == 0 and noempty:
+                    print("Cannot enter an empty value.")
+                else:
+                    return userans
 
     @staticmethod
     def UserInputYN(prompt, default="y"):
         while True:
             if default in "Yy":
-                defstr = " [Y/n]"
+                defstr = " [y]/n"
                 defaultans = True
             else:
-                defstr = " [y/N]"
+                defstr = " y/[n]"
                 defaultans = False
-            userans = raw_input(prompt + defstr)
+            userans = raw_input(prompt + defstr + ": ")
 
             if userans == "":
                 return defaultans

@@ -6,14 +6,14 @@ import autowrf_classlib as WRF
 from autowrf_classlib import UI
 import pdb
 
+def MyPath():
+    return os.path.dirname(os.path.abspath(__file__))
+
 def DomainsPath():
-    return os.path.join(os.path.dirname(__file__), "DOMAINS")
+    return os.path.join(MyPath(), "DOMAINS")
 
 def NamelistsPath():
-    return os.path.join(os.path.dirname(__file__), "NAMELISTS")
-
-def MyPath():
-    return os.path.dirname(__file__)
+    return os.path.join(MyPath(), "NAMELISTS")
 
 def Startup():
     # Check if the DOMAINS and NAMELISTS subfolders exist already,
@@ -31,7 +31,7 @@ def SelectWPSDomain():
     files = os.listdir(DomainsPath())
     domfiles = []
     for f in files:
-        if f.startswith("namelist.wps."):
+        if f.startswith("namelist.wps"):
             domfiles.append(f)
 
     if len(domfiles) > 0:
@@ -98,23 +98,24 @@ def LoadMenu():
     elif loadmethod == 4:
         return None
 
-def PrintHelp():
+def PrintHelp(markstring):
     # Find the DOC section in this file and print it
     pline = False
     with open(__file__, 'r') as f:
         for line in f:
             if not pline:
-                if "# DOC" in line and "#notthis" not in line:
+                if "# BEGIN{0}".format(markstring) in line:# and "#notthis" not in line:
                     pline = True
             else:
-                if "# ENDDOC" in line and "#notthis" not in line:
+                if "# END{0}".format(markstring) in line:# and "#notthis" not in line:
                     pline = False
                 else:
                     l = line.strip()
                     # Remove the leading #
                     if l.startswith("#"):
                         l = l[1:]
-
+                    # Replace $MYDIR with the directory of this file
+                    l = l.replace("$MYDIR", MyPath())
                     print(l)
 
 def SaveMenu(nlc):
@@ -133,7 +134,14 @@ def SaveMenu(nlc):
     elif sel == 1:
         nlc.WriteNamelists(dir=my_dir)
     elif sel == 2:
-        suffix = UI.UserInputValue("suffix")
+        while True:
+            suffix = UI.UserInputValue("suffix",noempty=True)
+            if os.path.isfile(os.path.join(NamelistsPath(),"namelist.input.{0}".format(suffix))) or os.path.isfile(os.path.join(NamelistsPath(),"namelist.wps.{0}".format(suffix))):
+                if UI.UserInputYN("{0} is already used. Overwrite?".format(suffix), default="n"):
+                    break
+            else:
+                break
+
         nlc.WriteNamelists(dir=NamelistsPath(), suffix=suffix)
 
         userans = raw_input("Do you also write to make these the current namelist? y/[n]: ")
@@ -155,7 +163,7 @@ def StartMenu():
         if sel == 0:
             return LoadMenu()
         elif sel == 1:
-            PrintHelp()
+            PrintHelp("HELP")
         elif sel == 2:
             exit(0)
 
@@ -268,7 +276,7 @@ if __name__ == "__main__":
         SaveMenu(nlc)
     if len(arg) > 1:
         if arg[1] == "-h" or arg[1] == "--help":
-            PrintHelp()
+            PrintHelp("DOC")
             print("Allowed met types are: ", end="")
             for m in WRF.Namelist.mets:
                 print(m, end=" ")
@@ -319,7 +327,7 @@ if __name__ == "__main__":
                 if a == "--force-wrf-only":
                     force_wrf_only = True
                     continue
-                    
+
                 optname, optval = SplitOpt(a)
                 if optname == "--start-date":
                     start_date = ParseDateTime(optval)
@@ -435,7 +443,7 @@ if __name__ == "__main__":
     exit(0)
 # Documentation section that will be printed as help text from the command line
 
-# DOC
+# BEGINDOC
 #
 # autowrf_namelist_main.py has 3 modes of usage:
 #   python autowrf_namelist_main.py: with no other options, this enters an interactive mode that allows the user to
@@ -491,8 +499,88 @@ if __name__ == "__main__":
 #   python autowrf_namelist_main.py check-wps-opt: same as check-wrf-opt but for WPS.
 #
 #   python autowrf_namelist_main.py get-wrf-opt: will return the value of the WRF namelist option specified using the
-#       same syntax as check-wrf-opt. Additionally, the flag --no-quotes will strip any ' characters from the string first.
+#       same syntax as check-wrf-opt. Additionally, the flag --no-quotes will strip any ' characters from the string
+#       first.
 #
 #   python autowrf_namelist_main.py get-wps-opt: same as get-wrf-opt but for WPS.
 #
 # ENDDOC
+#
+#
+# Help section printed for the interactive help
+# BEGINHELP
+#
+#   This help will focus on the interactive mode of operation.
+#   For help on the command line options, run "python autowrf_namelist_main.py --help" from the command line.
+#
+#   This program allows you to interactively modify WRF/WPS namelists. The primary advantage of doing it this way rather
+#   than manually editing them is that this program will ensure any options that should be synchronized between the two
+#   namelists are kept synchronized (e.g. e_we and e_sn). It also handles settings that relate to the choice of met data
+#   through your choice of met data.
+#
+#   When loading namelists, you are given four options:
+#       1) Load standard templates: this reads the namelist.input.template and namelist.wps.template files in
+#       $MYDIR.
+#       These are configured to support NEI, MEGAN, and MOZBC immediately and use RADM2 chemistry.
+#
+#       2) Load a WPS domain: You can place WPS namelists in
+#       $MYDIR/DOMAINS
+#       which will be generated the first time this program is run. Files in this directory should start with
+#       "namelist.wps". When you choose this option, it will list the namelist.wps files in DOMAINS and allow you to
+#       choose one. When you do, it loads that WPS file and the standard WRF namelist template, then copies the domain
+#       info into the WRF namelist. This is very useful if you want to use the plotgrid.ncl utility in WPS to quickly
+#       figure out your domain, then copy that domain to use with this program.
+#
+#       3) Load a pair of WPS/WRF namelists: Namelists can also go in
+#       $MYDIR/NAMELISTS
+#       although it is more intended that you will allow this program to save them there. Similarly to #2, this will
+#       then ask you to choose, in this case, both a WPS and WRF namelist file. You can use this feature to quickly
+#       switch between chemistry or domain choices.
+#
+#       4) Modify the current namelists: This will load the current namelists without any temporary changes. (More on
+#       those below).
+#
+#   Once you have loaded your namelists, you will be presented with a list of options to check or change. These are
+#   fairly self explanatory. One note: whenever you change the start/end date or the domain, it will ask you to
+#   choose a MOZBC input file. This expects the MOZBC files to be in a very specific place (../../MOZBC/data, relative
+#   to the autowrf_classlib.py file).  If it cannot find any, it will print an error message.  It also expects
+#   wrfbuild.cfg to be present one level above $MYDIR
+#   as that file will be where the MOZBC file is specified.  If you are not using this as part of the larger AutoWRFChem
+#   program, you can ignore this warnings, so long as you recognize that the MOZBC data file will not be specified
+#   automatically.
+#
+#   When saving, you are again given four options. To understand these, you should know that this program has the
+#   ability to temporarily modify the namelists while retaining a copy of the original. It does so by storing the
+#   current namelists in two ways. First, it writes out the namelist files namelist.input and namelist.wps in its
+#   directory:
+#
+#   $MYDIR
+#
+#   Second, it saves Python objects representing the namelists in the "namelist_pickle.pkl" file in the same directory.
+#   (A "pickle" is how Python can save data for it to read again later.) This does NOT contain any temporary changes,
+#   and is what is loaded when you choose "Modify the current namelists" when loading a file.
+#
+#   Temporary changes can be used when, for instance, you need to set the run time to 12 hours to generate NEI input
+#   files. You probably don't want to only run WRF for 12 hours when you do the actual run, but you do need it to only
+#   run that long to generate wrfchemi_00z_d01 and wrfchemi_12z_d01. By setting the 12 hour run time as a temporary
+#   change, this means that the next time this program is run, it can easily restore your settings for the full run. In
+#   fact, it does not support loading a namelist such that the temporary changes are maintained currently. (The full
+#   AutoWRFChem program uses the command line implementation of this to automate preparing NEI emissions.)
+#
+#   Now we can understand the options available for saving the namelists:
+#       1) Write namelist regularly: saves the namelists to both the actual namelist files and the pickle. Thus, if you
+#       ran this program again and chose "Modify current namelists" you would get the namelists you just saved.
+#
+#       2) Write just the namelist files: does not write the pickle. Thus, if you run this program again and chose
+#       "Modify current namelists" you would NOT get the namelist you just saved, but rather the last one you saved
+#       using option 1 or possibly 3.
+#
+#       3) Save namelits to NAMELISTS folder: this will ask for a suffix to append to the namelist names to identify
+#       them, then write the namelists to the NAMELIST folder, where it can load them later. It will also ask if you
+#       want to also set them to be the current namelist, if you answer yes, it saves both the regular files and the
+#       pickle.
+#
+#       4) Do not save: Self explanatory. Does not save anything.
+#
+#
+# ENDHELP
