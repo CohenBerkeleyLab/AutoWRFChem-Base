@@ -19,7 +19,7 @@
  dy = 30000,
  map_proj = 'lambert',
  ref_lat   =  34.83,
- ref_lon   = -81.03.,
+ ref_lon   = -81.03,
  truelat1  =  34.83,
  truelat2  =  34.83,
  stand_lon = -81.03,
