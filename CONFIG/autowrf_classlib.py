@@ -656,7 +656,7 @@ class NamelistContainer:
             print("{0} has no options".format(sect))
             return
 
-        optslist = [o for o in k if o not in self.domain_opts and o not in self.met_opts]
+        optslist = [o for o in k if o not in self.domain_opts and o not in self.met_opts and o not in self.date_opts]
         opt = UI.UserInputList("Choose the option to modify: ", optslist)
         if opt is None:
             return
