@@ -334,6 +334,8 @@ class NamelistContainer:
     wps_namelist_template_file = os.path.join(my_dir, "namelist.wps.template")
     pickle_file = os.path.join(my_dir, "namelist_pickle.pkl")
     cfg_fname = os.path.join(my_dir,"..","wrfbuild.cfg")
+    envvar_fname = os.path.join(my_dir,"..","envvar_wrfchem.cfg")
+    chem_fname = os.path.join(my_dir, "chemlist.txt")
 
     # List of options (besides the dates) duplicated in WRF and WPS
     domain_opts = ["e_we", "e_sn", "dx", "dy", "parent_id", "parent_grid_ratio", "i_parent_start", "j_parent_start"]
@@ -463,6 +465,125 @@ class NamelistContainer:
             print("Warning: could not find the wrfbuild.cfg file to ensure the meteorology is consistent.")
             print("Check that the meteorology is correct in that file before running WPS.")
 
+    def UserSetChem(self):
+        self.CheckChemTypeListFormat()
+        chem_types = self.GetChemTypeList()
+        if len(chem_types) == 0:
+            print("No chem types defined in {0}".format(self.chem_fname))
+            return
+
+        chem_type = UI.UserInputList("Choose a chemistry type: ", chem_types)
+        if chem_type is not None:
+            self.SetChem(chem_type)
+
+    def SetChem(self, chem_type):
+        chem_opts = self.GetChemTypeOpts(chem_type)
+        if chem_opts is not None:
+            for optname, optval in chem_opts.iteritems():
+                self.wrf_namelist.SetOptVal("chem",optname,optval)
+
+    def GetChemTypeList(self):
+        chem_types = []
+        with open(self.chem_fname, 'r') as f:
+            for line in f:
+                if line[0] == "#":
+                    continue
+                elif "BEGIN" in line:
+                    this_type = line.replace("BEGIN", "").strip()
+                    chem_types.append(this_type)
+
+        return chem_types
+
+    def GetChemTypeOpts(self, chem_type):
+        chem_opts = {}
+        found_chem = False
+        reading_chem = False
+        check_kpp = False
+        with open(self.chem_fname, 'r') as f:
+            for line in f:
+                if len(line.strip()) == 0 or line.strip()[0] == "#":
+                    continue
+                if "BEGIN" in line and chem_type in line:
+                    found_chem = True
+                    reading_chem = True
+                elif reading_chem and "END" in line:
+                    reading_chem = False
+                elif reading_chem:
+                    if "=" in line:
+                        lsplit = line.split("=")
+                        optname = lsplit[0].strip()
+                        optval = lsplit[1].strip()
+                        chem_opts[optname] = optval
+
+                    if "@ISKPP" in line:
+                        check_kpp = True
+
+        if check_kpp:
+            found_kpp = False
+            with open(self.envvar_fname, 'r') as f:
+                for line in f:
+                    if "WRF_KPP" in line and "=1" in line:
+                        found_kpp = True
+            if not found_kpp:
+                print("** Note: {0} requires WRF to be compiled with KPP enabled but WRF_KPP is not set to 1 in".format(chem_type))
+                print(self.envvar_fname)
+                if not UI.UserInputYN("Do you still wish to choose this chemistry?", default="n"):
+                    return None
+
+        if not found_chem:
+            raise IOError("Could not find {0} in {1}".format(chem_type, self.chem_fname))
+        else:
+            return chem_opts
+
+    def CheckChemTypeListFormat(self):
+        line_num = 0
+        looking_for_end = False
+        begin_lnum = 0
+        begin_chem = ""
+        found_chem_opt = False
+        with open(self.chem_fname, 'r') as f:
+            for line in f:
+                line_num += 1
+                if len(line.strip()) == 0 or line.strip()[0] == "#":
+                    continue
+
+                if "BEGIN" in line and not looking_for_end:
+                    looking_for_end = True
+                    begin_lnum = line_num
+                    begin_chem = line.replace("BEGIN","").strip()
+                    found_chem_opt = False
+                elif "BEGIN" in line and looking_for_end:
+                    print("   Warning reading chemlist.txt: BEGIN at line {0} has no matching END".format(begin_lnum))
+                    found_chem_opt = False
+
+                if "END" in line and looking_for_end:
+                    if begin_chem != line.replace("END","").strip():
+                        print("   Warning reading chemlist.txt: BEGIN {0} at line {1} matches {2} at line {3}"
+                              " (chemistry label mismatch)".format(begin_chem, begin_lnum, line.strip(), line_num))
+                    looking_for_end = False
+                elif "END" in line and not looking_for_end:
+                    print("   Warning reading chemlist.txt: END at line {0} has no matching BEGIN".format(line_num))
+
+                if "END" in line and not found_chem_opt:
+                    print("   Warning reading chemlist.txt: No value for chem_opt found for {0}".format(begin_chem))
+
+                if "=" in line:
+                    lsplit = line.split("=")
+                    optname = lsplit[0].strip()
+                    if len(optname) == 0:
+                        print("   Warning reading chemlist.txt: no option name before the = in line {0}".format(line_num))
+                    elif not self.wrf_namelist.IsOptInSection("chem", optname):
+                        print("   Warning reading chemlist.txt: {0} is an unknown chemistry namelist option (line {1})".format(optname, line_num))
+                    elif optname == "chem_opt":
+                        found_chem_opt = True
+                    optvals = [v for v in lsplit[1].strip().split(" ") if v != ""]
+                    if len(optvals) == 0:
+                        print("   Warning reading chemlist.txt: no option value after the = in line {0}".format(line_num))
+                    elif len(optvals) > 1:
+                        print("   Warning reading chemlist.txt: multiple option values given in line {0}".format(line_num))
+
+
+
     @staticmethod
     def UserSetMozFile():
         # This function should be called any time the domain or time period is changed. It will ask the user to verify
@@ -589,7 +710,7 @@ class NamelistContainer:
         dx = int(self.wps_namelist.GetOptValNoSect("dx", 1))
         dy = int(self.wps_namelist.GetOptValNoSect("dy", 1))
         if dx < 10000:
-            print("NEI regridded is very simple and may behave strangely for dx < 10000 m")
+            print("NEI regridding is very simple and may behave strangely for dx < 10000 m")
             if UI.UserInputYN("Change it?"):
                 optval = UI.UserInputValue("dx", currval=dx)
                 if optval is not None:
@@ -622,6 +743,12 @@ class NamelistContainer:
             if UI.UserInputYN("Set it to 1?"):
                 self.wrf_namelist.SetOptValNoSect("emiss_inpt_opt", 1)
 
+        kemit = int(self.wrf_namelist.GetOptValNoSect("kemit", 1))
+        if kemit != 19:
+            print("NEI has 19 emission levels. kemit is currently {0}".format(kemit))
+            if UI.UserInputYN("Set kemit to 19?"):
+                self.wrf_namelist.SetOptValNoSect("kemit", 19)
+
     def CmdSetOtherOpt(self, optname, optval, forceWrfOnly=False):
         # This one will be fairly complicated. First, we need to see if the option is one that is shared (domain opts)
         # or one that should not be set directly. After that, we need to figure out which namelist it belongs to, then
@@ -652,9 +779,9 @@ class NamelistContainer:
         # Present a menu to let the user modify the namelist once. So this should be called from a while loop to allow
         # user to modify mulitple options. Returns True or False, False if the user has requested to exit.
         prmpt = "Choose what to modify or do:"
-        opts = ["Start/end date", "Domain (common opts only)", "Meterology", "Other WRF options", "Other WPS options",
-                "Check for NEI compatibility", "Select MOZBC file", "Display WRF options", "Display WPS options",
-                "Save and exit"]
+        opts = ["Start/end date", "Domain (common opts only)", "Meterology", "Chemistry", "Other WRF options",
+                "Other WPS options", "Check for NEI compatibility", "Select MOZBC file", "Display WRF options",
+                "Display WPS options", "Save and exit"]
         sel = UI.UserInputList(prmpt, opts, returntype="index", emptycancel=False)
         if sel == 0:
             self.UserSetTimePeriod()
@@ -663,18 +790,20 @@ class NamelistContainer:
         elif sel == 2:
             self.UserSetMet()
         elif sel == 3:
-            self.UserSetOtherOpt(self.wrf_namelist)
+            self.UserSetChem()
         elif sel == 4:
-            self.UserSetOtherOpt(self.wps_namelist)
+            self.UserSetOtherOpt(self.wrf_namelist)
         elif sel == 5:
-            self.UserNEICompatCheck()
+            self.UserSetOtherOpt(self.wps_namelist)
         elif sel == 6:
-            NamelistContainer.UserSetMozFile()
+            self.UserNEICompatCheck()
         elif sel == 7:
-            self.DisplayOptions(self.wrf_namelist)
+            NamelistContainer.UserSetMozFile()
         elif sel == 8:
-            self.DisplayOptions(self.wps_namelist)
+            self.DisplayOptions(self.wrf_namelist)
         elif sel == 9:
+            self.DisplayOptions(self.wps_namelist)
+        elif sel == 10:
             return False
 
         return True
