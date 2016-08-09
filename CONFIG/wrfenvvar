@@ -89,11 +89,50 @@ if $usekpp; then
     libdirs="/usr/lib64 /usr/lib/ $WRF_KPP_LIBS"
 
     echo "export WRF_KPP=1" >> $outfile
-    if [ -z $YACC ]; then
+    if ! $override; then
+        doexit=false
+        if [ -z "$YACC" ]; then
+            yaccloc=$(which yacc)
+            echo "export YACC=\"$yaccloc -d\"" >> $outfile
+        else
+            yaccarray=($YACC) # usually has the -d flag, which we need to remove before testing existance.
+            if [ ! -f "${yaccarray[0]}" ]; then
+                echo "Your value for YACC ($YACC) does not seem to point to a valid file."
+                echo "Correct this, clear the YACC environmental variable, or use the override mode"
+                echo "to force autowrfchem to find it."
+                doexit=true
+            else
+                # This keeps the final check happy 
+                yaccloc="${yaccarray[0]}"
+            fi
+        fi
+        if [ -z $FLEX_LIB_DIR ]; then
+            for p in $libdirs; do
+                flexloc=$(find $p -name libfl.a)
+                if [ ! -z $flexloc ]; then
+                    flexloc=$(dirname $flexloc)
+                    echo "export FLEX_LIB_DIR=$flexloc" >> $outfile
+                    break
+                fi
+            done
+        else
+            if [ ! -f "$FLEX_LIB_DIR/libfl.a" ]; then
+                echo "Your value for FLEX_LIB_DIR ($FLEX_LIB_DIR) does not seem to point to a directory with libfl.a."
+                echo "Correct this, clear the FLEX_LIB_DIR environmental variable, or use the override mode"
+                echo "to force autowrfchem to find it."
+                doexit=true
+            else
+                # This keeps the final check happy
+                flexloc="$FLEX_LIB_DIR"
+            fi
+        fi
+        if $doexit; then
+            exit 1
+        fi
+    else
         yaccloc=$(which yacc)
         echo "export YACC=\"$yaccloc -d\"" >> $outfile
-    fi
-    if [ -z $FLEX_LIB_DIR ]; then
+        
         for p in $libdirs; do
             flexloc=$(find $p -name libfl.a)
             if [ ! -z $flexloc ]; then
