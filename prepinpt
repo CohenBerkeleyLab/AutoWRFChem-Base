@@ -72,6 +72,19 @@ else
     domegan=true
 fi
 
+
+# Ensure that namelist.input is linked
+# Backup only if not already a link to somewhere
+cd ../WRFV3/run
+if [ -f namelist.input ]; then
+    lnk=`readlink namelist.input`
+    if [ ! -z $lnk ]; then
+        mv namelist.input namelist.input.autowrf-backup
+    fi
+fi
+ln -sf "$mydir/CONFIG/namelist.input"
+cd "$mydir"
+
 # The exit status needs to be 0 if everything works,
 # otherwise have bits representing which one failed
 # start as 011111 and remove 1's as things succeed
@@ -152,5 +165,6 @@ mozbcexit=$?
 if [ $mozbcexit -eq 0 ]; then
     exitstat=$((exitstat-32))
 fi
+
 
 exit $exitstat

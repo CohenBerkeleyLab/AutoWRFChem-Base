@@ -231,6 +231,9 @@ if $doprepinpt; then
     exit $?
 fi
 if $dorun; then
+    if $dometonly; then
+        runargs="$runargs --met-only"
+    fi
     $mydir/runwrf $runargs
     exit $?
 fi

@@ -14,10 +14,14 @@ pyprog="$mydir/CONFIG/autowrf_namelist_main.py"
 # See if this was called with the "override" flag
 override=false
 usempi=true
+metonly=false
 while [ $# -gt 0 ]; do
     case $1 in
         override|--override)
             override=true
+            ;;
+        --met-only)
+            metonly=true
             ;;
         --ntasks*)
             i=`expr index "$1" "="`
@@ -51,14 +55,16 @@ if [ ! "namelist.input" -ef "$mydir/CONFIG/namelist.input" ]; then
 fi
 
 missingfile=false
-if [ ! -f wrfchemi_00z_d01 -o ! -f wrfchemi_12z_d01 ]; then
-    echo "One or both of wrfchemi_00z_d01, wrfchemi_12z_d01 not found in WRFV3/run"
-    missingfile=true
-fi
+if ! $metonly; then
+    if [ ! -f wrfchemi_00z_d01 -o ! -f wrfchemi_12z_d01 ]; then
+        echo "One or both of wrfchemi_00z_d01, wrfchemi_12z_d01 not found in WRFV3/run"
+        missingfile=true
+    fi
 
-if [ ! -f wrfbiochemi_d01 ]; then
-    echo "wrfbiochemi_d01 not found in WRFV3/run"
-    missingfile=true
+    if [ ! -f wrfbiochemi_d01 ]; then
+        echo "wrfbiochemi_d01 not found in WRFV3/run"
+        missingfile=true
+    fi
 fi
 
 syr=`python $pyprog get-wrf-opt --start_year`
