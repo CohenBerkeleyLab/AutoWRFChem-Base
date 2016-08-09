@@ -109,7 +109,7 @@ done
 # WRF namelist permanently to account for the fact that the
 # dx dy in the WPS namelist is ONLY IN THAT CASE given in degrees
 # but the WRF namelist still expects meters
-mapproj=`$pyprog get-wps-opt --no-quotes --map_proj`
+mapproj=`python $pyprog get-wps-opt --no-quotes --map_proj`
 if [ "$mapproj" == "lat-lon" ]; then
     which ncdump > /dev/null
     if [ $? -ne 0 ]; then
@@ -123,14 +123,20 @@ if [ "$mapproj" == "lat-lon" ]; then
         echo "***********************************************************************************"
         echo ""
     else
-        regex="[0-9]+"
+        # These work together to capture the number as, e.g.
+        #   977.123f --> 977.123
+        #   977.f --> 977
+        #   977f --> 977
+        # Basically we only want the decimal point if followed by numbers
+        regex1="[0-9]+\.[0-9]+"
+        regex2="[0-9]+"
         metfile=`ls -1 met_em* | head -n 1`
         dx=`ncdump -h $metfile | grep ":DX"`
-        if [[ $dx =~ $regex ]]; then
+        if [[ $dx =~ $regex1 ]] || [[ $dx =~ $regex2 ]]; then
             dxNum=${BASH_REMATCH[0]}
         fi
-        dy=`ncdump -h | grep ":DY"`
-        if [[ $dy =~ $regex ]]; then
+        dy=`ncdump -h $metfile | grep ":DY"`
+        if [[ $dy =~ $regex1 ]] || [[ $dy =~ $regex2 ]]; then
             dyNum=${BASH_REMATCH[0]}
         fi
 
@@ -149,8 +155,8 @@ if [ "$mapproj" == "lat-lon" ]; then
             echo "LAT-LON map proj: Setting DX and DY in namelist.input to match met_em files"
             echo "***************************************************************************"
             echo ""
-            $pyprog mod --force-wrf-only --dx=$dxNum
-            $pyprog mod --force-wrf-only --dy=$dyNum
+            python $pyprog mod --force-wrf-only --dx=$dxNum
+            python $pyprog mod --force-wrf-only --dy=$dyNum
         fi
     fi
 fi
