@@ -177,17 +177,27 @@ class Namelist:
         else:
             return self.opts[sectname][optname]
 
-    def GetOptValNoSect(self, optname, domainnum=None):
+    def GetOptValNoSect(self, optname, domainnum=None, noquotes=False):
         # Finds an option by name in any section. The optional argument domainnum allows the user to request a single
-        # domain's value (1 based)
+        # domain's value (1 based). noquotes removes any leading or trailing '
+        val = None
         for sect in self.opts:
             if self.IsOptInSection(sect, optname):
                 if domainnum is not None and type(self.opts[sect][optname]) is list:
-                    return self.opts[sect][optname][domainnum-1]
+                    val = self.opts[sect][optname][domainnum-1]
                 else:
-                    return self.opts[sect][optname]
+                    val = self.opts[sect][optname]
 
-        raise KeyError("Could not find the option {0}".format(optname))
+        if val is None:
+            raise KeyError("Could not find the option {0}".format(optname))
+
+        if noquotes and type(val) is str:
+            if val[0] == "'":
+                val = val[1:]
+            if val[-1] == "'":
+                val = val[:-1]
+
+        return val
 
     def IsOptBool(self, sectname, optname):
         opt = self.opts[sectname][optname]
@@ -271,6 +281,8 @@ class WrfNamelist(Namelist):
 
 
 class WpsNamelist(Namelist):
+    allowed_proj = ("lambert", "mercator", "polar", "lat-lon")
+
     def SetTimePeriod(self, startdate, enddate):
         curr_start, curr_end = self.GetTimePeriod()
         if startdate is None:
@@ -323,6 +335,55 @@ class WpsNamelist(Namelist):
         else:
             time_parts = [0, 0, 0]
         return dt.datetime(date_parts[0], date_parts[1], date_parts[2], time_parts[0], time_parts[1], time_parts[2])
+
+    def MapProjOptions(self, map_proj):
+        # Returns the necessary lat/lon settings for a given map projection as the first tuple
+        # Returns all options specific to different projections as the second.
+        all_opts = ("truelat1", "truelat2", "stand_lon", "pole_lat", "pole_lon")
+        if map_proj == "lambert":
+            proj_opts = ("truelat1", "truelat2", "stand_lon")
+        elif map_proj == "mercator":
+            proj_opts = ("truelat1")
+        elif map_proj == "polar":
+            proj_opts = ("truelat1", "stand_lon")
+        elif map_proj == "lat-lon":
+            proj_opts = ("pole_lat", "pole_lon", "stand_lon")
+        else:
+            print("{0} is not a recognized map projection".format(map_proj))
+            proj_opts = None
+
+        return proj_opts, all_opts
+
+    def AdjustMapProjOpts(self, map_proj):
+        # Returns true if adjustment succeeded, false otherwise
+        proj_opts, all_opts = self.MapProjOptions(map_proj)
+        # All these options are in the "geogrid" section
+        curr_opts = self.opts["geogrid"].keys()
+        opt_added = False
+        opt_removed = False
+        for opt in all_opts:
+            if opt in proj_opts and opt not in curr_opts:
+                # Needed option does not exist, add it.
+                self.opts["geogrid"][opt] = ["0"]
+                self.SetOptVal("geogrid", opt, 0)
+                opt_added = True
+            elif opt not in proj_opts and opt in curr_opts:
+                # Unecessary option exists, remove it
+                junk = self.opts["geogrid"].pop(opt)
+                opt_removed = True
+
+        if opt_added or opt_removed:
+            # Shift geog_data_path around to the end
+            gdp_temp = self.opts["geogrid"].pop("geog_data_path", None)
+            self.opts["geogrid"]["geog_data_path"] = gdp_temp
+
+        if opt_added:
+            print("New domain options added to WPS geogrid section for {0} projection - you will need to set them".format(map_proj))
+        if opt_removed:
+            print("Domain options unecessary for {0} projection removed".format(map_proj))
+        if opt_added or opt_removed:
+            junk = raw_input("Press ENTER to continue.")
+
 
 class NamelistContainer:
     # Class used to store both the WRF and WPS namelists and interact with them. This way we can ensure that any options
@@ -582,8 +643,6 @@ class NamelistContainer:
                     elif len(optvals) > 1:
                         print("   Warning reading chemlist.txt: multiple option values given in line {0}".format(line_num))
 
-
-
     @staticmethod
     def UserSetMozFile():
         # This function should be called any time the domain or time period is changed. It will ask the user to verify
@@ -661,9 +720,16 @@ class NamelistContainer:
         if opt is None:
             return
 
-        optval = UI.UserInputValue(opt, isbool=namelist.IsOptBool(sect, opt), currval=namelist.GetOptValNoSect(opt,1))
+        if opt == "map_proj":
+            optval = UI.UserInputList("Choose a map projection: ", namelist.allowed_proj,
+                                      currentvalue=namelist.GetOptValNoSect(opt, 1, noquotes=True))
+        else:
+            optval = UI.UserInputValue(opt, isbool=namelist.IsOptBool(sect, opt), currval=namelist.GetOptValNoSect(opt, 1))
+
         if optval is not None:
             namelist.SetOptVal(sect, opt, optval)
+            if opt == "map_proj":
+                namelist.AdjustMapProjOpts(optval)
 
     def DisplayOptions(self, namelist):
         sectnames = namelist.opts.keys()
@@ -824,8 +890,8 @@ class UI:
         # Input checking
         if type(prompt) is not str:
             raise TypeError("PROMPT must be a string")
-        if type(options) is not list:
-            raise TypeError("OPTIONS must be a list")
+        if type(options) is not list and type(options) is not tuple:
+            raise TypeError("OPTIONS must be a list or tuple")
         if type(returntype) is not str or returntype.lower() not in ["value", "index"]:
             raise TypeError("RETURNTYPE must be one of the strings 'value' or 'index'")
 

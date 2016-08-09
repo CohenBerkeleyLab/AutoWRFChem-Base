@@ -429,10 +429,7 @@ if __name__ == "__main__":
                 eprint("Could not find '{0}' in specified namelist".format(optname))
                 exit(1)
             else:
-                val=namelist.GetOptValNoSect(optname,domainnum=1)
-                if noquote:
-                    val=val.replace("'","")
-
+                val = namelist.GetOptValNoSect(optname, domainnum=1, noquotes=noquote)
                 print(val)
         else:
             eprint("Command '{0}' not recognized".format(arg[1]))
