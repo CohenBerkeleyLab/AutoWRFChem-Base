@@ -77,7 +77,7 @@ fi
 # start as 011111 and remove 1's as things succeed
 # = 2+4+8+16+32 = 62
 if $metonly; then
-    exitstat=2
+    exitstat=3
 else
     exitstat=62
 fi
@@ -95,6 +95,17 @@ else
 fi
 
 if $metonly; then
+    if [ $wpsexit -eq 0 ]; then
+        echo "Running real.exe since only the meterology has been requested."
+        cd ../WRFV3/run
+        ./real.exe
+        realexit=$?
+        if [ $realexit -eq 0 ]; then
+            exitstat=$((exitstat-1))
+        fi
+    else
+        echo "WPS failed, not running real.exe."
+    fi
     exit $exitstat
 fi
 
