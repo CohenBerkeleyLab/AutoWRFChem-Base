@@ -15,6 +15,7 @@ pyprog="$mydir/CONFIG/autowrf_namelist_main.py"
 override=false
 usempi=true
 metonly=false
+rst=true
 while [ $# -gt 0 ]; do
     case $1 in
         override|--override)
@@ -29,6 +30,9 @@ while [ $# -gt 0 ]; do
             ;;
         --nompi)
             usempi=false
+            ;;
+        --restart)
+            rst=true
             ;;
     esac
     shift
@@ -97,6 +101,27 @@ fi
 if $missingfile; then
     echo "One or more missing files, aborting run."
     exit 1
+fi
+
+# If we need to restart, then find the last restart file and set the date to it
+if $rst; then
+    ls wrfrst* >& /dev/null
+    if [ $? -gt 0 ]; then
+        echo "No restart files available, cannot restart"
+        exit 1
+    fi
+    
+    rstfile=`ls -1 wrfrst* | tail -n 1`
+    regex="[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]:[0-9][0-9]:[0-9][0-9]"
+    if [[ $rstfile =~ $regex ]]; then
+        rdate="${BASH_REMATCH[0]}"
+        python $pyprog tempmod --start-date="$rdate"
+        python $pyprog tempmod --restart=".true."
+        exit 0 # debugging only
+    else
+        echo "Could not determine date of restart file ($rstfile)"
+        exit 1
+    fi
 fi
 
 # Actually run WRF!

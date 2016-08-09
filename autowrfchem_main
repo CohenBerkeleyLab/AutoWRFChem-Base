@@ -84,6 +84,9 @@ while [ $# -gt 0 ]; do
         echo "        by ./$myname config. If running WRF-Chem in parallel, must pass"
         echo "        the number of tasks to start (x) as --ntasks=x. If running in"
         echo "        serial, must pass the flag --nompi instead"
+        echo "    ./$myname run restart : will try to find the last wrfrst file in"
+        echo "        WRFV3/run and start from there. If it cannot find a wrfrst file,"
+        echo "        it will abort."
         echo ""
         echo ""
         echo "  Exit codes for the compile and prepinpt steps will indicate which step"
@@ -148,6 +151,9 @@ while [ $# -gt 0 ]; do
         runargs="$runargs $1"
         ;;
     --nompi)
+        runargs="$runargs $1"
+        ;;
+    restart)
         runargs="$runargs $1"
         ;;
     *)
