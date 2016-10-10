@@ -84,7 +84,7 @@ while [ $# -gt 0 ]; do
         echo "        by ./$myname config. If running WRF-Chem in parallel, must pass"
         echo "        the number of tasks to start (x) as --ntasks=x. If running in"
         echo "        serial, must pass the flag --nompi instead"
-        echo "    ./$myname run restart : will try to find the last wrfrst file in"
+        echo "    ./$myname run rst : will try to find the last wrfrst file in"
         echo "        WRFV3/run and start from there. If it cannot find a wrfrst file,"
         echo "        it will abort."
         echo ""
@@ -153,8 +153,8 @@ while [ $# -gt 0 ]; do
     --nompi)
         runargs="$runargs $1"
         ;;
-    restart)
-        runargs="$runargs $1"
+    rst)
+        runargs="$runargs --restart"
         ;;
     *)
         echo "$1 is not a recognized option"
@@ -240,7 +240,8 @@ if $dorun; then
     if $dometonly; then
         runargs="$runargs --met-only"
     fi
-    $mydir/runwrf $runargs
+
+    $mydir/runwrf2 $runargs
     exit $?
 fi
 

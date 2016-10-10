@@ -15,7 +15,7 @@ pyprog="$mydir/CONFIG/autowrf_namelist_main.py"
 override=false
 usempi=true
 metonly=false
-rst=true
+rst=false
 while [ $# -gt 0 ]; do
     case $1 in
         override|--override)
@@ -115,9 +115,7 @@ if $rst; then
     regex="[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]:[0-9][0-9]:[0-9][0-9]"
     if [[ $rstfile =~ $regex ]]; then
         rdate="${BASH_REMATCH[0]}"
-        python $pyprog tempmod --start-date="$rdate"
-        python $pyprog tempmod --restart=".true."
-        exit 0 # debugging only
+        python $pyprog tempmod --start-date="$rdate" --restart=".true."
     else
         echo "Could not determine date of restart file ($rstfile)"
         exit 1
