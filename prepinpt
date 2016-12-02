@@ -3,6 +3,7 @@
 mydir=`dirname $0`
 cd "$mydir"
 mydir=`pwd -P`
+pyprog="$mydir/CONFIG/autowrf_namelist_main.py"
 
 checkonly=false
 finishonly=false
@@ -72,6 +73,13 @@ else
     domegan=true
 fi
 
+# Are we doing FDDA nudging? If so, we'll want to turn that
+# off for each run of real.exe EXCEPT the last one
+python $pyprog --check-wrf-opt --grid_fdda=1
+fdda_check=$?
+if [[ $fdda_check == 0 ]]; then
+    export FDDA_ON=1
+fi
 
 # Ensure that namelist.input is linked
 # Backup only if not already a link to somewhere

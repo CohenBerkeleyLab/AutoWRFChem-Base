@@ -379,7 +379,10 @@ if __name__ == "__main__":
             for a in arg[2:]:
                 optname, optval = SplitOpt(a)
                 optname = optname.replace("-", "")
-                nlopt = namelist.GetOptValNoSect(optname,domainnum=1)
+                if not namelist.IsOptInNamelist(optname):
+                    eprint("Could not find '{0}' in specified namelist".format(optname))
+                    exit(2)
+                nlopt = namelist.GetOptValNoSect(optname, domainnum=1)
                 optval = optval.split(",")
                 optbool = []
                 # Any option should be in a string format. However, some may include single quotes.
@@ -427,7 +430,7 @@ if __name__ == "__main__":
             optname = arg[2].replace("-", "")
             if not namelist.IsOptInNamelist(optname):
                 eprint("Could not find '{0}' in specified namelist".format(optname))
-                exit(1)
+                exit(2)
             else:
                 val = namelist.GetOptValNoSect(optname, domainnum=1, noquotes=noquote)
                 print(val)
@@ -491,13 +494,14 @@ if __name__ == "__main__":
 #       options specified on the command line are correct as stored in the current permanent namelist (so temporary
 #       changes made with "tempmod" cannot be checked), this will exit with 0. If any do not match, it exits with 1. If
 #       you wish to allow the option to be one of several values, separate each with a comma, i.e
-#       --io_form_auxinput5=2,11 will return 0 if io_form_auxinput5 is 2 or 11.
+#       --io_form_auxinput5=2,11 will return 0 if io_form_auxinput5 is 2 or 11. If it cannot find an option, it exits
+#       with exit code 2
 #
 #   python autowrf_namelist_main.py check-wps-opt: same as check-wrf-opt but for WPS.
 #
 #   python autowrf_namelist_main.py get-wrf-opt: will return the value of the WRF namelist option specified using the
 #       same syntax as check-wrf-opt. Additionally, the flag --no-quotes will strip any ' characters from the string
-#       first.
+#       first. Like check-wrf-opt, if it cannot find the option, it exits with exit code 2.
 #
 #   python autowrf_namelist_main.py get-wps-opt: same as get-wrf-opt but for WPS.
 #

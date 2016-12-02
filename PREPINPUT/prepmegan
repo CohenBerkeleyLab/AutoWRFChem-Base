@@ -8,8 +8,14 @@ cd "`dirname $0`"
 mydir="`pwd -P`"
 pyprog="$mydir/../CONFIG/autowrf_namelist_main.py"
 
-
-python $pyprog tempmod --bio_emiss_opt=0
+if [[ $FDDA_ON == 1 ]]; then
+    fdda_args="--grid_fdda=0"
+else
+    # Just being explicit, since an unassigned variable
+    # would also return an empty string
+    fdda_args=""
+fi
+python $pyprog tempmod --bio_emiss_opt=0 $fdda_args
 cd ../../WRFV3/run
 
 if [ -f wrfbiochemi_d01 ]; then

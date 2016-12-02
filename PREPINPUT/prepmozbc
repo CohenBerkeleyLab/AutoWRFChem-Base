@@ -91,6 +91,30 @@ if $missingfiles; then
     exit 1
 fi
 
+# Also double check the grid_fdda setting. if $FDDA_ON was set in the main prepinpt script,
+# then grid_fdda should be on here. If not, something weird is going on.
+if [[ $FDDA_ON == 1 ]]; then
+    python $pyprog check-wrf-opt --grid_fdda=1
+    fdda_check=$?
+    if [[ $fdda_check == 1 ]]; then
+        echo "Problem with prepmozbc: the main prepinpt script found that grid_fdda==1 in namelist.input"
+        echo "at the beginning of the input prep run and set the env. variable FDDA_ON to 1, but grid_fdda"
+        echo "did not get returned to 1 in the namelist before running the last instance of real.exe"
+        exit 1
+    elif [[ $fdda_check == 2 ]]; then
+        echo "Problem with prepmozbc: the main prepinpt script found that grid_fdda==1 in namelist.input"
+        echo "at the beginning of the input prep run and set the env. variable FDDA_ON to 1, but grid_fdda"
+        echo "does not exist in the namelist now." 
+        exit 1
+    elif [[ $fdda_check != 0 ]]; then
+        echo "Problem with prepmozbc: checking for the value of grid_fdda failed with an exit code of $fdda_check"
+        echo "Typically, the only exit codes should be 0 (option is correct), 1 (option is wrong), or 2"
+        echo "(option not found in namelist). Has $pyprog"
+        echo "been updated since the last time prepmozbc was edited?"
+        exit 1 
+    fi
+fi
+
 ./real.exe
 realexit=$?
 if [ $realexit -ne 0 ]; then
