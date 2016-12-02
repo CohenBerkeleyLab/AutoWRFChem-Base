@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# Reference this script
+cd `dirname $0`
+mydir=`pwd -P`
+
+pyprog="$mydir/../CONFIG/autowrf_namelist_main.py"
+
+# Change into the WRF/run directory, get a list of the met_em files
+cd ../../WRFV3/run
+mets=met_em*
+
+# For each met file, switch the namelist (temporarily) to run just
+# that time, generate wrfinput_d01, then move that to be 
+# wrfinput_d01_yyyy-mm-dd_HH:MM:SS
+regex=[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]:[0-9][0-9]:[0-9][0-9]
+for f in $mets; do
+    if [[ $f =~ $regex ]]; then
+        mdate="${BASH_REMATCH[0]}"
+        echo "Met date = $mdate"
+        python $pyprog tempmod --start-date="$mdate" --run-time=0h
+        echo "Generating wrfinput for $mdate"
+        ./real.exe
+        mv wrfinput_d01 "wrfinput_d01_$mdate"
+    fi
+done

@@ -16,9 +16,9 @@ BEGIN RADM2
     dust_opt = 0
     dmsemis_opt = 0
     seas_opt = 0
-    have_bcs_chem = .false.
-    gas_bc_opt = 1
-    gas_ic_opt = 1
+    have_bcs_chem = .true.
+    gas_bc_opt = 16
+    gas_ic_opt = 16
     aer_bc_opt = 1
     aer_ic_opt = 1
     gaschem_onoff = 1
@@ -38,9 +38,9 @@ BEGIN R2SMH
     dust_opt = 0
     dmsemis_opt = 0
     seas_opt = 0
-    have_bcs_chem = .false.
-    gas_bc_opt = 1
-    gas_ic_opt = 1
+    have_bcs_chem = .true.
+    gas_bc_opt = 16
+    gas_ic_opt = 16
     aer_bc_opt = 1
     aer_ic_opt = 1
     gaschem_onoff = 1
