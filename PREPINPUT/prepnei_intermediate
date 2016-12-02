@@ -29,7 +29,7 @@ fi
 
 for f in wrfem*; do
     if [ -f "../../../WRFV3/run/$f" ]; then
-        mv "../../../WRFV3/run/$f{,.autowrf-backup}"
+        mv "../../../WRFV3/run/${f}" "../../../WRFV3/run/${f}.autowrf-backup"
     fi
 done
 

@@ -241,7 +241,7 @@ if $dorun; then
         runargs="$runargs --met-only"
     fi
 
-    $mydir/runwrf2 $runargs
+    $mydir/runwrf $runargs
     exit $?
 fi
 
