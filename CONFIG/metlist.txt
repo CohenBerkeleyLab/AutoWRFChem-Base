@@ -1,0 +1,24 @@
+# This file holds the meteorology related options that will be set when
+# selecting a meteorology in autowrfchem_classlib.py.
+#
+# To add a new meteorology, you'll need to add a section delineated by
+# "BEGIN ___" and "END ___" where ___ is replaced by the meterology name.
+# Do not include quotes. List the options to set using 
+#
+# namelist:namelist_section:option = value 
+#
+# as an example,
+#
+# wrf:time_control:interval_seconds = 10800
+#
+# Only include one value per line (nested domains are not implemented).
+# Whitespace does not matter.
+
+BEGIN NARR
+    wps:share:interval_seconds = 10800
+    wrf:time_control:interval_seconds = 10800
+    wrf:domains:p_top_requested = 10000
+    wrf:domains:e_vert = 30
+    wrf:domains:num_metgrid_levels = 30
+    wrf:domains:num_metgrid_soil_levels = 4
+END NARR

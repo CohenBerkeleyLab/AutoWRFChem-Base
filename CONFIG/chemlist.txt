@@ -4,73 +4,75 @@
 # To add a new section, it must begin and end with the lines "BEGIN ___" and "END ___" (without the quotes) where ___
 # is replaced with the name you want it to be called in the program. (e.g. BEGIN RADM2). This is case sensitive in that
 # BEGIN and END must be capitalized. To mark the mechanism as a KPP mechanism, include the line @ISKPP anywhere between
-# the BEGIN and END statements. Then, list each option to be set using "option_name = val" (without quotes). White space
+# the BEGIN and END statements. 
+#
+# List each option to be set using "namelist:section:option_name = val" (without quotes). White space
 # does not matter, but DO NOT include more than one value per line at the moment (nested domains are not implemented).
 
 BEGIN RADM2
-    chem_opt = 2
-    chem_in_opt = 0
-    phot_opt = 2
-    gas_drydep_opt = 1
-    aer_drydep_opt = 1
-    dust_opt = 0
-    dmsemis_opt = 0
-    seas_opt = 0
-    have_bcs_chem = .true.
-    gas_bc_opt = 16
-    gas_ic_opt = 16
-    aer_bc_opt = 1
-    aer_ic_opt = 1
-    gaschem_onoff = 1
-    aerchem_onoff = 1
-    wetscav_onoff = 0
-    cldchem_onoff = 0
-    vertmix_onoff = 1
+    wrf:chem:chem_opt = 2
+    wrf:chem:chem_in_opt = 0
+    wrf:chem:phot_opt = 2
+    wrf:chem:gas_drydep_opt = 1
+    wrf:chem:aer_drydep_opt = 1
+    wrf:chem:dust_opt = 0
+    wrf:chem:dmsemis_opt = 0
+    wrf:chem:seas_opt = 0
+    wrf:chem:have_bcs_chem = .true.
+    wrf:chem:gas_bc_opt = 16
+    wrf:chem:gas_ic_opt = 16
+    wrf:chem:aer_bc_opt = 1
+    wrf:chem:aer_ic_opt = 1
+    wrf:chem:gaschem_onoff = 1
+    wrf:chem:aerchem_onoff = 1
+    wrf:chem:wetscav_onoff = 0
+    wrf:chem:cldchem_onoff = 0
+    wrf:chem:vertmix_onoff = 1
 END RADM2
 
 BEGIN R2SMH
 @ISKPP
-    chem_opt = 113
-    chem_in_opt = 0
-    phot_opt = 2
-    gas_drydep_opt = 1
-    aer_drydep_opt = 1
-    dust_opt = 0
-    dmsemis_opt = 0
-    seas_opt = 0
-    have_bcs_chem = .true.
-    gas_bc_opt = 16
-    gas_ic_opt = 16
-    aer_bc_opt = 1
-    aer_ic_opt = 1
-    gaschem_onoff = 1
-    aerchem_onoff = 1
-    wetscav_onoff = 0
-    cldchem_onoff = 0
-    vertmix_onoff = 1
+    wrf:chem:chem_opt = 113
+    wrf:chem:chem_in_opt = 0
+    wrf:chem:phot_opt = 2
+    wrf:chem:gas_drydep_opt = 1
+    wrf:chem:aer_drydep_opt = 1
+    wrf:chem:dust_opt = 0
+    wrf:chem:dmsemis_opt = 0
+    wrf:chem:seas_opt = 0
+    wrf:chem:have_bcs_chem = .true.
+    wrf:chem:gas_bc_opt = 16
+    wrf:chem:gas_ic_opt = 16
+    wrf:chem:aer_bc_opt = 1
+    wrf:chem:aer_ic_opt = 1
+    wrf:chem:gaschem_onoff = 1
+    wrf:chem:aerchem_onoff = 1
+    wrf:chem:wetscav_onoff = 0
+    wrf:chem:cldchem_onoff = 0
+    wrf:chem:vertmix_onoff = 1
 END R2SMH
 
 BEGIN DUST
-    chem_opt = 401
-    io_style_emissions = 0
-    emiss_inpt_opt = 0
-    emiss_opt = 0
-    bio_emiss_opt = 0
-    chem_in_opt = 0
-    phot_opt = 0
-    gas_drydep_opt = 0
-    aer_drydep_opt = 0
-    dust_opt = 0
-    dmsemis_opt = 0
-    seas_opt = 0
-    have_bcs_chem = .false.
-    gas_bc_opt = 0
-    gas_ic_opt = 0
-    aer_bc_opt = 0
-    aer_ic_opt = 0
-    gaschem_onoff = 0
-    aerchem_onoff = 0
-    wetscav_onoff = 0
-    cldchem_onoff = 0
-    vertmix_onoff = 1
+    wrf:chem:chem_opt = 401
+    wrf:chem:io_style_emissions = 0
+    wrf:chem:emiss_inpt_opt = 0
+    wrf:chem:emiss_opt = 0
+    wrf:chem:bio_emiss_opt = 0
+    wrf:chem:chem_in_opt = 0
+    wrf:chem:phot_opt = 0
+    wrf:chem:gas_drydep_opt = 0
+    wrf:chem:aer_drydep_opt = 0
+    wrf:chem:dust_opt = 0
+    wrf:chem:dmsemis_opt = 0
+    wrf:chem:seas_opt = 0
+    wrf:chem:have_bcs_chem = .false.
+    wrf:chem:gas_bc_opt = 0
+    wrf:chem:gas_ic_opt = 0
+    wrf:chem:aer_bc_opt = 0
+    wrf:chem:aer_ic_opt = 0
+    wrf:chem:gaschem_onoff = 0
+    wrf:chem:aerchem_onoff = 0
+    wrf:chem:wetscav_onoff = 0
+    wrf:chem:cldchem_onoff = 0
+    wrf:chem:vertmix_onoff = 1
 END DUST

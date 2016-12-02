@@ -103,6 +103,14 @@ class Namelist:
 
         return False
 
+    def IsSectionInNamelist(self, sectname):
+        # Checks if the given section name exists in the namelist
+        for sect in self.opts:
+            if sect == sectname:
+                return True
+
+        return False
+
     def FindOptSection(self, optname):
         # Returns which section the option is in, or None if not an option
         for sect in self.opts:
@@ -250,16 +258,6 @@ class WrfNamelist(Namelist):
         self.SetOptVal("time_control", "run_minutes", hms[1])
         self.SetOptVal("time_control", "run_seconds", hms[2])
 
-    def SetMetOpts(self, met_type):
-        if met_type == "NARR":
-            self.SetOptVal("time_control", "interval_seconds", 10800)
-            self.SetOptVal("domains", "p_top_requested", 10000)
-            self.SetOptVal("domains", "e_vert", 30)
-            self.SetOptVal("domains", "num_metgrid_levels", 30)
-            self.SetOptVal("domains", "num_metgrid_soil_levels", 4)
-        else:
-            raise RuntimeError("{0} is not a recognized meteorology".format(met_type))
-
     def GetTimePeriod(self):
         sy = int(self.GetOptVal("time_control", "start_year", domainnum=1))
         sm = int(self.GetOptVal("time_control", "start_month", domainnum=1))
@@ -309,11 +307,6 @@ class WpsNamelist(Namelist):
         end_string = "{:04}-{:02}-{:02}_{:02}:{:02}:{:02}".format(enddate.year, enddate.month, enddate.day, enddate.hour, enddate.minute, enddate.second)
         self.SetOptVal("share", "end_date", end_string)
 
-    def SetMetOpts(self, met_type):
-        if met_type == "NARR":
-            self.SetOptVal("share", "interval_seconds", 10800)
-        else:
-            raise RuntimeError("{0} is not a recognized meteorology".format(met_type))
 
     def GetTimePeriod(self):
         # Returns the start and end dates as datetime objects. Currently just returns the first domain time period
@@ -396,6 +389,7 @@ class NamelistContainer:
     pickle_file = os.path.join(my_dir, "namelist_pickle.pkl")
     cfg_fname = os.path.join(my_dir,"..","wrfbuild.cfg")
     envvar_fname = os.path.join(my_dir,"..","envvar_wrfchem.cfg")
+    met_fname = os.path.join(my_dir, "metlist.txt")
     chem_fname = os.path.join(my_dir, "chemlist.txt")
 
     # List of options (besides the dates) duplicated in WRF and WPS
@@ -427,8 +421,7 @@ class NamelistContainer:
 
         # Met option will have to be given on the command line
         if met is not None:
-            self.wrf_namelist.SetMetOpts(met)
-            self.wps_namelist.SetMetOpts(met)
+            self.SetMet(met)
 
     def WriteNamelists(self, dir=None, suffix=None):
         if dir is None:
@@ -500,15 +493,19 @@ class NamelistContainer:
         NamelistContainer.UserSetMozFile()
 
     def UserSetMet(self):
-        met_type = UI.UserInputList("Choose your meteorology: ", Namelist.mets)
+        met_type = UI.UserInputList("Choose your meteorology: ", self.GetTypeList(self.met_fname))
         self.SetMet(met_type)
 
     def SetMet(self, met_type):
-        if met_type not in Namelist.mets:
-            raise RuntimeError("{0} is not a valid meteorology. Allowed meteorologies are {1}".format(met_type, Namelist.mets))
+        if met_type not in self.GetTypeList(self.met_fname):
+            raise RuntimeError("{0} is not a valid meteorology. Allowed meteorologies are {1}".
+                               format(met_type, ', '.join(self.GetTypeList(self.met_fname))))
 
-        self.wrf_namelist.SetMetOpts(met_type)
-        self.wps_namelist.SetMetOpts(met_type)
+        met_opts = self.GetMetTypeOpts(met_type)
+        if met_opts is not None:
+            for opt in met_opts:
+                nl = opt["namelist"]
+                nl.SetOptVal(opt["section"], opt["name"], opt["value"])
 
         # Also make sure that the met choice is reflected in the wrfbuild.cfg file which *should* be one level up
 
@@ -527,8 +524,8 @@ class NamelistContainer:
             print("Check that the meteorology is correct in that file before running WPS.")
 
     def UserSetChem(self):
-        self.CheckChemTypeListFormat()
-        chem_types = self.GetChemTypeList()
+        self.CheckTypeListFormat(self.chem_fname)
+        chem_types = self.GetTypeList(self.chem_fname)
         if len(chem_types) == 0:
             print("No chem types defined in {0}".format(self.chem_fname))
             return
@@ -540,23 +537,47 @@ class NamelistContainer:
     def SetChem(self, chem_type):
         chem_opts = self.GetChemTypeOpts(chem_type)
         if chem_opts is not None:
-            for optname, optval in chem_opts.iteritems():
-                self.wrf_namelist.SetOptVal("chem",optname,optval)
+            for opt in chem_opts:
+                nl = opt["namelist"]
+                nl.SetOptVal(opt["section"], opt["name"], opt["value"])
 
-    def GetChemTypeList(self):
-        chem_types = []
-        with open(self.chem_fname, 'r') as f:
+    def GetTypeList(self, list_file):
+        types = []
+        with open(list_file, 'r') as f:
             for line in f:
                 if line[0] == "#":
                     continue
                 elif "BEGIN" in line:
                     this_type = line.replace("BEGIN", "").strip()
-                    chem_types.append(this_type)
+                    types.append(this_type)
 
-        return chem_types
+        return types
+
+    def GetMetTypeOpts(self, met_type):
+        met_opts = []
+        found_met = False
+        reading_met = False
+        with open(self.met_fname, 'r') as f:
+            for line in f:
+                if len(line.strip()) == 0 or line.strip()[0] == "#":
+                    continue
+                if "BEGIN" in line and met_type in line:
+                    found_met = True
+                    reading_met = True
+                elif reading_met and "END" in line:
+                    reading_met = False
+                elif reading_met:
+                    if "=" in line:
+                        opt_dict = self.ParseOptionLine(line)
+                        met_opts.append(opt_dict)
+
+        if not found_met:
+            raise IOError("Could not find {0} in {1}".format(met_type, self.met_fname))
+        else:
+            return met_opts
 
     def GetChemTypeOpts(self, chem_type):
-        chem_opts = {}
+        chem_opts = []
         found_chem = False
         reading_chem = False
         check_kpp = False
@@ -571,38 +592,64 @@ class NamelistContainer:
                     reading_chem = False
                 elif reading_chem:
                     if "=" in line:
-                        lsplit = line.split("=")
-                        optname = lsplit[0].strip()
-                        optval = lsplit[1].strip()
-                        chem_opts[optname] = optval
+                        opt_dict = self.ParseOptionLine(line)
+                        chem_opts.append(opt_dict)
 
                     if "@ISKPP" in line:
                         check_kpp = True
 
         if check_kpp:
             found_kpp = False
-            with open(self.envvar_fname, 'r') as f:
-                for line in f:
-                    if "WRF_KPP" in line and "=1" in line:
-                        found_kpp = True
-            if not found_kpp:
-                print("** Note: {0} requires WRF to be compiled with KPP enabled but WRF_KPP is not set to 1 in".format(chem_type))
-                print(self.envvar_fname)
-                if not UI.UserInputYN("Do you still wish to choose this chemistry?", default="n"):
-                    return None
+            if os.path.isfile(self.envvar_fname):
+                with open(self.envvar_fname, 'r') as f:
+                    for line in f:
+                        if "WRF_KPP" in line and "=1" in line:
+                            found_kpp = True
+                if not found_kpp:
+                    print("** Note: {0} requires WRF to be compiled with KPP enabled but WRF_KPP is not set to 1 in".format(chem_type))
+                    print(self.envvar_fname)
+                    if not UI.UserInputYN("Do you still wish to choose this chemistry?", default="n"):
+                        return None
+            else:
+                print("** Note: {0} requires WRF to be compiled with KPP enabled. Could not find\n"
+                      "{1}\n"
+                      "to ensure that the env. variable WRF_KPP is set.\n"
+                      "Be sure KPP is enabled when you configure WRF.".format(chem_type, self.envvar_fname))
 
         if not found_chem:
             raise IOError("Could not find {0} in {1}".format(chem_type, self.chem_fname))
         else:
             return chem_opts
 
-    def CheckChemTypeListFormat(self):
+    def ParseOptionLine(self, line):
+        lsplit = line.split("=")
+        optid = lsplit[0].strip().split(":")
+        if len(optid) != 3:
+            raise IOError("Problem reading a list file: line does not have namelist, section, and "
+                          "option name specified: {0}".format(line))
+
+        if optid[0] == "wrf":
+            nl = self.wrf_namelist
+        elif optid[0] == "wps":
+            nl = self.wps_namelist
+        else:
+            raise IOError("{0} is not a valid namelist (reading metlist.txt)".format(optid[0]))
+
+
+        optsect = optid[1]
+        optname = optid[2]
+        optval = lsplit[1].strip()
+        return {"namelist":nl, "section":optsect, "name": optname, "value":optval}
+
+    def CheckTypeListFormat(self, list_file):
+        list_shortfile = os.path.basename(list_file)
+
         line_num = 0
         looking_for_end = False
         begin_lnum = 0
         begin_chem = ""
         found_chem_opt = False
-        with open(self.chem_fname, 'r') as f:
+        with open(list_file, 'r') as f:
             for line in f:
                 line_num += 1
                 if len(line.strip()) == 0 or line.strip()[0] == "#":
@@ -614,34 +661,56 @@ class NamelistContainer:
                     begin_chem = line.replace("BEGIN","").strip()
                     found_chem_opt = False
                 elif "BEGIN" in line and looking_for_end:
-                    print("   Warning reading chemlist.txt: BEGIN at line {0} has no matching END".format(begin_lnum))
+                    print("   Warning reading {1}: BEGIN at line {0} has no matching END".format(begin_lnum, list_shortfile))
                     found_chem_opt = False
 
                 if "END" in line and looking_for_end:
                     if begin_chem != line.replace("END","").strip():
-                        print("   Warning reading chemlist.txt: BEGIN {0} at line {1} matches {2} at line {3}"
-                              " (chemistry label mismatch)".format(begin_chem, begin_lnum, line.strip(), line_num))
+                        print("   Warning reading {4}: BEGIN {0} at line {1} matches {2} at line {3}"
+                              " (label mismatch)".format(begin_chem, begin_lnum, line.strip(), line_num, list_shortfile))
                     looking_for_end = False
                 elif "END" in line and not looking_for_end:
-                    print("   Warning reading chemlist.txt: END at line {0} has no matching BEGIN".format(line_num))
+                    print("   Warning reading {1}: END at line {0} has no matching BEGIN".format(line_num, list_shortfile))
 
-                if "END" in line and not found_chem_opt:
-                    print("   Warning reading chemlist.txt: No value for chem_opt found for {0}".format(begin_chem))
+                if "END" in line and list_shortfile == "chemlist.txt" and not found_chem_opt:
+                    print("   Warning reading {1}: No value for chem_opt found for {0}".format(begin_chem, list_shortfile))
 
                 if "=" in line:
                     lsplit = line.split("=")
-                    optname = lsplit[0].strip()
+                    optid = [v for v in lsplit[0].strip().split(":") if v != ""]
+
+                    if len(optid) != 3:
+                        print("   Warning reading {0}: any option must specify namelist, section, and option name"
+                              " separated by colons. Line {1} does not.".format(list_shortfile, line_num))
+
+                    if optid[0] == "wrf":
+                        nl = self.wrf_namelist
+                    elif optid[0] == "wps":
+                        nl = self.wps_namelist
+                    else:
+                        print("   Warning reading {0}: '{1}' is not a recognized namelist (line {2})".
+                              format(list_shortfile, optid[0], line_num))
+                        continue
+
+                    optsect = optid[1]
+                    optname = optid[2]
+
                     if len(optname) == 0:
-                        print("   Warning reading chemlist.txt: no option name before the = in line {0}".format(line_num))
-                    elif not self.wrf_namelist.IsOptInSection("chem", optname):
-                        print("   Warning reading chemlist.txt: {0} is an unknown chemistry namelist option (line {1})".format(optname, line_num))
+                        print("   Warning reading {1}: no option name before the = in line {0}".format(line_num, list_shortfile))
+                    elif not nl.IsSectionInNamelist(optsect):
+                        print("   Warning reading {0}: {1} is not a valid {2} namelist section (line {3})".
+                              format(list_shortfile, optsect, optid[0], line_num))
+                    elif not nl.IsOptInSection(optsect, optname):
+                        print("   Warning reading {0}: {1}:{2} is an unknown {3} namelist section/option pair (line {4})".
+                              format(list_shortfile, optsect, optname, optid[0], line_num, ))
                     elif optname == "chem_opt":
                         found_chem_opt = True
+
                     optvals = [v for v in lsplit[1].strip().split(" ") if v != ""]
                     if len(optvals) == 0:
-                        print("   Warning reading chemlist.txt: no option value after the = in line {0}".format(line_num))
+                        print("   Warning reading {1}: no option value after the = in line {0}".format(line_num, list_shortfile))
                     elif len(optvals) > 1:
-                        print("   Warning reading chemlist.txt: multiple option values given in line {0}".format(line_num))
+                        print("   Warning reading {1}: multiple option values given in line {0}".format(line_num, list_shortfile))
 
     @staticmethod
     def UserSetMozFile():
@@ -715,10 +784,13 @@ class NamelistContainer:
             print("{0} has no options".format(sect))
             return
 
-        optslist = [o for o in k if o not in self.domain_opts and o not in self.met_opts and o not in self.date_opts]
+        optslist = [o for o in k if o not in self.domain_opts and o not in self.date_opts]
         opt = UI.UserInputList("Choose the option to modify: ", optslist)
         if opt is None:
             return
+
+        if opt in self.met_opts:
+            print("Note: {0} is usually set by choosing a meteorology type, not directly".format(opt))
 
         if opt == "map_proj":
             optval = UI.UserInputList("Choose a map projection: ", namelist.allowed_proj,
@@ -821,13 +893,13 @@ class NamelistContainer:
         # set it for that namelist. Will also need to check if the setting is a boolean before setting it.
         if optname in self.date_opts:
             raise RuntimeError("Do not set {0} directly, it must be set using the date/run time options.".format(optname))
-        elif optname in self.met_opts:
-            raise RuntimeError("Do not set {0} directly, it must be set using the --met option".format(optname))
         elif optname in self.domain_opts:
             if not forceWrfOnly:
                 self.wps_namelist.SetOptValNoSect(optname, optval)
             self.wrf_namelist.SetOptValNoSect(optname, optval)
         else:
+            if optname in self.met_opts:
+                print("Warning: {0} is typically set by changing the meteorology type, rather than directly.".format(optname))
             sect = self.wps_namelist.FindOptSection(optname)
             if sect is not None:
                 namelist = self.wps_namelist
