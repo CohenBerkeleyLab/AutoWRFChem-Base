@@ -8,6 +8,7 @@
 # 3) The met files for the start and end date are present
 
 cd `dirname $0`
+myname=`basename $0`
 mydir=`pwd -P`
 pyprog="$mydir/CONFIG/autowrf_namelist_main.py"
 
@@ -16,6 +17,7 @@ override=false
 usempi=true
 metonly=false
 rst=false
+errnorst=true
 while [ $# -gt 0 ]; do
     case $1 in
         override|--override)
@@ -33,6 +35,9 @@ while [ $# -gt 0 ]; do
             ;;
         --restart)
             rst=true
+            ;;
+        --allow-no-file)
+            errnorst=false
             ;;
     esac
     shift
@@ -103,22 +108,27 @@ if $missingfile; then
     exit 1
 fi
 
+
 # If we need to restart, then find the last restart file and set the date to it
 if $rst; then
-    ls wrfrst* >& /dev/null
-    if [ $? -gt 0 ]; then
-        echo "No restart files available, cannot restart"
-        exit 1
-    fi
-    
-    rstfile=`ls -1 wrfrst* | tail -n 1`
-    regex="[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]:[0-9][0-9]:[0-9][0-9]"
-    if [[ $rstfile =~ $regex ]]; then
-        rdate="${BASH_REMATCH[0]}"
-        python $pyprog tempmod --start-date="$rdate" --restart=".true."
+    rstfile=`$mydir/RUNUTILS/lastrst`
+    if [[ ! -z $rstfile ]]; then
+        regex="[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]:[0-9][0-9]:[0-9][0-9]"
+        if [[ $rstfile =~ $regex ]]; then
+            rdate="${BASH_REMATCH[0]}"
+            python $pyprog tempmod --start-date="$rdate" --restart=".true."
+        else
+            echo "$myname: Could not determine date of restart file ($rstfile)"
+            exit 1
+        fi
     else
-        echo "Could not determine date of restart file ($rstfile)"
-        exit 1
+        if $errnorst; then
+            echo "$myname: No restart file in the time period of the namelist found"
+            exit 1
+        else
+            echo "No restart file in the time period of the namelist found, starting at beginning"
+            python $pyprog tempmod --restart=".false."
+        fi
     fi
 fi
 

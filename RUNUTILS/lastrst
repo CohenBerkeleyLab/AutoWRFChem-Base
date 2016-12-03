@@ -1,0 +1,36 @@
+#!/bin/bash
+#
+# Finds the last restart file in ../../WRFV3/run and echoes it
+# Therefore we can't echo anything else from this to stdout, it must
+# go to stderr if an error message is required.
+
+cd `dirname $0`
+myname=`basename $0`
+mydir=`pwd -P`
+pyprog="$mydir/../CONFIG/autowrf_namelist_main.py"
+pydc="$mydir/../Tools/datecompare.py"
+
+# Get the start and end dates from the WRF namelist
+wrf_start=`python $pyprog get-wrf-opt --start-date`
+wrf_end=`python $pyprog get-wrf-opt --end-date`
+
+rstfiles="../../WRFV3/run/wrfrst*"
+regex="[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]:[0-9][0-9]:[0-9][0-9]"
+for f in $rstfiles; do
+    if [[ $f =~ $regex ]]; then
+        rdate="${BASH_REMATCH[0]}"
+
+        python $pydc --datefmt '%Y-%m-%d_%H:%M:%S' "$rdate" ge "$wrf_start"
+        start_chk=$?
+        python $pydc --datefmt '%Y-%m-%d_%H:%M:%S' "$rdate" lt "$wrf_end"
+        end_chk=$?
+
+        if [[ $start_chk == 0 ]] && [[ $end_chk == 0 ]]; then
+            last_rst_file="$f"
+        fi
+    else
+        echo "Could not determine date of restart file ($f)" >&2
+    fi
+done
+
+echo "$last_rst_file"

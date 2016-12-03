@@ -428,7 +428,13 @@ if __name__ == "__main__":
                 noquote=False
 
             optname = arg[2].replace("-", "")
-            if not namelist.IsOptInNamelist(optname):
+            if optname == "startdate":
+                start_date, end_date = nlc.GetTimePeriod()
+                print(start_date.strftime("%Y-%m-%d_%H:%M:%S"))
+            elif optname == "enddate":
+                start_date, end_date = nlc.GetTimePeriod()
+                print(end_date.strftime("%Y-%m-%d_%H:%M:%S"))
+            elif not namelist.IsOptInNamelist(optname):
                 eprint("Could not find '{0}' in specified namelist".format(optname))
                 exit(2)
             else:

@@ -84,9 +84,12 @@ while [ $# -gt 0 ]; do
         echo "        by ./$myname config. If running WRF-Chem in parallel, must pass"
         echo "        the number of tasks to start (x) as --ntasks=x. If running in"
         echo "        serial, must pass the flag --nompi instead"
-        echo "    ./$myname run rst : will try to find the last wrfrst file in"
-        echo "        WRFV3/run and start from there. If it cannot find a wrfrst file,"
-        echo "        it will abort."
+        echo "    ./$myname run rst : will try to find the last wrfrst file within the"
+        echo "        time period in the namelist in WRFV3/run and start from there."
+        echo "        If it cannot find a wrfrst file, it will abort."
+        echo "    ./$myname run rst --allow-no-file : if no restart files in the proper"
+        echo "        time period found, this will start from the beginning instead of"
+        echo "        aborting."
         echo ""
         echo ""
         echo "  Exit codes for the compile and prepinpt steps will indicate which step"
@@ -120,8 +123,9 @@ while [ $# -gt 0 ]; do
     namelist)
         namelistonly=true
         ;;
-    override)
+    override|--override)
         envvaroverride=true
+        runargs="$runargs --override"
         ;;
     compile)
         docompile=true
@@ -155,6 +159,9 @@ while [ $# -gt 0 ]; do
         ;;
     rst)
         runargs="$runargs --restart"
+        ;;
+    --allow-no-file)
+        runargs="$runargs --allow-no-file"
         ;;
     *)
         echo "$1 is not a recognized option"

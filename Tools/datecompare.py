@@ -22,9 +22,9 @@ def parse_args():
     parser.add_argument('date1', help='The first date to compare. The format of the string is determined by the --datefmt option.')
     parser.add_argument('op', help='The operation to use to compare the two dates. Can be:\n  =, ==, eq (equality) \n  !=, ne (not equal)'
                                     '\n  <, lt (less than) \n  <=, le (less than or equal to) \n  >, gt (greater than),'
-                                    '\n  >=, ge (greater than or equal to)'
-                                    'Note: most of the symbolic operations (e.g. <, >) will need to be quoted when presented as arguments'
-                                    'to avoid the shell interpreting them as special symbols for, e.g. redirection.')
+                                    '\n  >=, ge (greater than or equal to) \n'
+                                    '        Note: most of the symbolic operations (e.g. <, >) will need to be quoted when presented as arguments \n'
+                                    '        to avoid the shell interpreting them as special symbols for, e.g. redirection.')
     parser.add_argument('date2', help='The second date to compare. The comparison is date1 op date2.')
     return parser.parse_args()
 
