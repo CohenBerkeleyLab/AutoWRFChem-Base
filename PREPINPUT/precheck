@@ -64,7 +64,7 @@ fi
 # Make sure that the met directory exists as does the mozbc file and the 
 # MEGAN and NEI data
 if [ -f "$mydir/../wrfbuild.cfg" ]; then
-    . "$mydir/../wrfbuild.cfg" # source the file with metDir and mozbcFile in it
+    . "$mydir/../wrfbuild.cfg" # source the file with metType, metDir, and mozbcFile in it
 else
     echo "wrfbuild.cfg does not exist. Run autowrfchem config at least once to generate it."
     exit 1
@@ -72,6 +72,7 @@ fi
 
 # Check the met directory from WPS since that's where it'll be called from
 cd ../../WPS
+wpsdir="$(pwd -P)"
 if [ ! -d "$metDir" ]; then
     echo ""
     echo "The directory supposedly containing the meteorology data"
@@ -79,6 +80,32 @@ if [ ! -d "$metDir" ]; then
     echo "does not exist. Fix it in $mydir/../wrfbuild.cfg."
     badopts=true
 fi
+
+# Verify that the raw met files needed are present in the met directory
+wrfstart="$(python $pyprog get-wrf-opt --start-date)"
+wrfend="$(python $pyprog get-wrf-opt --end-date)"
+reqmetfiles=$(python "$mydir/metgriblist.py" "$metType" "$wrfstart" "$wrfend")
+cd "$metDir"
+missingMetFiles=""
+for metfile in $reqmetfiles; do
+    if [[ ! -f $metfile ]]; then
+        missingMetFiles="$missingMetFiles $metfile"
+    fi
+done
+
+if [[ ! -z $missingMetFiles ]]; then
+    echo "The following expected met files could not be found in"
+    echo "$metDir"
+    for f in $missingMetFiles; do
+        echo "    $f"
+    done
+    badopts=true
+else
+    echo "All raw met files found"
+fi
+
+# Need to go back to WPS directory so the relative paths work
+cd "$wpsdir"
 
 # Also check the geog_data_path and constants file
 geogpath="`python $pyprog get-wps-opt --no-quotes --geog_data_path`"

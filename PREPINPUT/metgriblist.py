@@ -111,7 +111,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Generate the list of meteorology files expected by WPS for a given '
                                                  'date range',
                                      formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument("mettype", help="Which type of meteorology to generate file names for. Allowed values: {0}".
+    parser.add_argument("mettype", help="Which type of meteorology to generate file names for. Allowed values (case insensitive): {0}".
                         format(", ".join(allowed_mets)))
     parser.add_argument("startdate", help="The first date of the WRF run, in yyyy-mm-dd_HH:MM:SS format")
     parser.add_argument("enddate", help="The last date of the WRF run, in yyyy-mm-dd_HH:MM:SS format")
@@ -119,7 +119,7 @@ def parse_args():
                         help="Print the files one per line (rather than space delimited)")
 
     inputs = parser.parse_args()
-    if inputs.mettype not in allowed_mets:
+    if inputs.mettype.lower() not in allowed_mets:
         print("{0} is not one of the allowed meteorologies (allowed mets: {1})".format(
             inputs.mettype, ", ".join(allowed_mets)), file=sys.stderr)
         exit(1)
@@ -140,7 +140,7 @@ def parse_args():
     start_date = dt.date(start_datetime.year, start_datetime.month, start_datetime.day)
     end_datetime = dt.datetime.strptime(inputs.enddate, "%Y-%m-%d_%H:%M:%S")
     end_date = dt.date(end_datetime.year, end_datetime.month, end_datetime.day)
-    return inputs.mettype, start_date, end_date, inputs.l
+    return inputs.mettype.lower(), start_date, end_date, inputs.l
 
 #### MAIN FUNCTION #####
 if __name__ == "__main__":
