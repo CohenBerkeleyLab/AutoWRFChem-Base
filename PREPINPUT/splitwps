@@ -1,0 +1,113 @@
+#!/bin/bash
+#
+# This allows you to split up WPS jobs into multiple directories
+# which can then be submitted separately to deal with large amounts
+# of met data to process (i.e. whole US for three years...)
+
+tmp=$(dirname $0)
+mydir=$(cd "$tmp"; pwd -P)
+pyprog="$mydir/../CONFIG/autowrf_namelist_main.py"
+pydc="$mydir/../Tools/datecompare.py"
+rootdir=$(cd "$mydir/../.."; pwd -P)
+
+# Input parsing
+
+ndays=30
+dosubmit=false
+
+while [[ $# -gt 0 ]]; do
+    key=$1
+    case $key in
+    --submitfile*)
+        subfile=${key#*=}
+        # AUTOCALLDIR is set in the main autowrfchem script
+        # as the directory that it is called from. So filenames
+        # given as relative paths should be pointed to properly
+        if [[ ${subfile:0:1} != "/" ]]; then
+            subfile="$AUTOCALLDIR/$subfile"
+        fi
+        ;;
+    --ndays*)
+        ndays=${key#*=}
+        ;;
+    esac
+    shift
+done
+
+if [[ ! -z $subfile ]]; then
+    dosubmit=true
+    grep '#AUTOWRFEXEC' "$subfile" >& /dev/null
+    if [[ $? != 0 ]]; then
+        echo "File passed with --subfile= must have a line containing '#AUTOWRFEXEC' to be replaced with the necessary commands." >&2
+        exit 1
+    fi
+fi
+
+
+# Store the WRF date format for the datecompare program
+datefmt='%Y-%m-%d_%H:%M:%S'
+
+# Test for SLURM scheduler
+if $dosubmit; then
+    which sbatch >& /dev/null
+    slurm_chk=$?
+    if [[ $slurm_chk == 0 ]]; then
+        subcmd="sbatch"
+    else
+        echo "Cannot find scheduler, will not autosubmit jobs" >&2
+    fi
+fi
+
+# Get the actual end date
+enddate=$(python "$pyprog" get-wps-opt --end-date)
+
+# Clean up the WPS directory prior to copying
+echo "WARNING: will delete all met files in WPS and old WPS_nn directories in 60 sec"
+sleep 60
+
+ungrib_prefix="$(python $pyprog get-wps-opt --prefix --no-quotes)"
+cd "$rootdir"
+rm -f WPS/GRIBFILE* WPS/$ungrib_prefix* WPS/PFILE* WPS/met_em*
+rm -rf WPS_*
+rm -f WRFV3/run/met_em*
+
+i=0
+datechk=1
+while [[ $datechk == 1 ]]; do
+    
+    # Set the run time temporarily to 30 days, as long as that doesn't exceed
+    # the requested end date
+    sdatemod="+$((i*ndays))d"
+    python "$pyprog" tempmod --run-time=${ndays}d --start-date=$sdatemod
+
+    tmpend=$(python "$pyprog" get-wps-opt --end-date)
+    python "$pydc" --datefmt=$datefmt "$tmpend" gt "$enddate" 
+    datechk=$?
+    if [[ $datechk == 0 ]]; then
+        python "$pyprog" tempmod --start-date=$sdatemod
+    fi
+
+    newdir="WPS_$(printf '%02d' $i)"
+    cp -r WPS/ $newdir
+    rm -rf $newdir/.git $newdir/.gitignore $newdir/namelist.wps
+    cp -f "$mydir/../CONFIG/namelist.wps" "$newdir/"
+
+    i=$((i+1))
+done
+
+# Reset the main namelists to the full time period
+python "$pyprog" tempmod
+
+if $dosubmit; then
+    # should still be in AutoWRFChem top (root) directory at this point
+    wps_rundirs=WPS_*
+    for w in $wps_rundirs; do
+        prepcmd="$AUTOWRFDIR/autowrfchem_main prepinpt met-only --wpsdir=$w --noreal"
+        prepcmd=$(echo "$prepcmd" | sed -e 's/\//\\\//g')
+        sed -e "s/.*#AUTOWRFEXEC.*/$prepcmd/" "$subfile" > "${subfile}_$w"
+        echo "Submitting ${subfile}_$w with $subcmd"
+        $subcmd "${subfile}_$w"
+    done
+fi
+
+exit 0

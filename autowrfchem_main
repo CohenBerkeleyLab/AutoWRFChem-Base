@@ -2,15 +2,17 @@
 #
 # First parse arguments
 
+# Used when filenames are given relative to the folder that
+# this is called from
+export AUTOCALLDIR=`pwd -P`
+
 myname=`basename $0`
-lnk=`readlink $0`
+cd `dirname $0`
+lnk=`readlink $myname`
 if [ ! -z "$lnk" ]; then
     cd `dirname $lnk`
-    mydir=`pwd -P`
-else
-    cd `dirname $0`
-    mydir=`pwd -P`
 fi
+mydir=`pwd -P`
 export AUTOWRFDIR=`pwd -P`
 
 doconfig=false
@@ -20,6 +22,7 @@ docompile=false
 doclean=false
 cleaninput=false
 doprepinpt=false
+prepargs=""
 docheckonly=false
 dometonly=false
 dofinishonly=false
@@ -70,10 +73,28 @@ while [ $# -gt 0 ]; do
         echo "        additional argument to only check what is necessary for preparing"
         echo "        meteorology."
         echo ""
-        echo "    ./$myname prepinput met-only : will only prepare met data, and run"
+        echo "    ./$myname prepinpt met-only : will only prepare met data, and run"
         echo "        real.exe after finishing WPS."
         echo ""
-        echo "    ./$myname prepinput finish : will only prepare inputs that are missing."
+        echo "    ./$myname prepinpt met-only --noreal : will not run real at the end"
+        echo "        of preparing the met input."
+        echo ""
+        echo "    ./$myname prepinpt met-only --wpsdir=<WPS directory> : run WPS in a different"
+        echo "        directory, relative to the top directory of AutoWRFChem, i.e. the one that"
+        echo "        contains WRFV3, WPS, etc. This is not really meant to be called manually,"
+        echo "        instead, it is a component of the split-met option"
+        echo ""
+        echo "    ./$myname prepinpt split-met [ --ndays=<n> ] [ --submitfile=<file> ]"
+        echo "        Divides the WPS preprocessing up into time periods of ndays days, which is"
+        echo "        30 by default. If a file is given via the --submitfile option, it will submit"
+        echo "        jobs to a batch scheduler (e.g. SLURM or QSUB) to carry out all the necessary"
+        echo "        met preprocessing. The file must be a batch submission script with a line"
+        echo "        #AUTOWRFEXEC specified. That will be replaced by the necessary command to"
+        echo "        run all the different WPS subdivisions."
+        echo ""
+        echo "    ./$myname prepinpt chem-only : run everything but WPS."
+        echo ""
+        echo "    ./$myname prepinpt finish : will only prepare inputs that are missing."
         echo "        Note that this is pretty simple minded with respect to met data, and"
         echo "        will simply assume that WPS succeeded if ANY met_em files are present"
         echo "        in WRFV3/run."
@@ -140,13 +161,22 @@ while [ $# -gt 0 ]; do
         doprepinpt=true
         ;;
     check)
-        docheckonly=true
+        prepargs="$prepargs --check-only"
         ;;
     met-only)
-        dometonly=true
+        prepargs="$prepargs --met-only"
+        ;;
+    chem-only)
+        prepargs="$prepargs --chem-only"
+        ;;
+    split-met)
+        prepargs="$prepargs --splitmet"
         ;;
     finish)
-        dofinishonly=true
+        prepargs="$prepargs --finish-only"
+        ;;
+    --noreal|--wpsdir*|--ndays*|--submitfile*)
+        prepargs="$prepargs $1"
         ;;
     run)
         dorun=true
@@ -229,17 +259,6 @@ if $docompile; then
     exit $compexit
 fi
 if $doprepinpt; then
-    prepargs=""
-    if $docheckonly; then
-        prepargs="$prepargs --check-only"
-    fi
-    if $dometonly; then
-        prepargs="$prepargs --met-only"
-    fi
-    if $dofinishonly; then
-        prepargs="$prepargs --finish-only"
-    fi
-    
     $mydir/prepinpt $prepargs
     exit $?
 fi
