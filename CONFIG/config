@@ -28,5 +28,13 @@ echo "metType=$metType" >> $outfile
 
 echo "Enter the path where the meteorology data is stored."
 echo "You may also skip this and modify $mydir/wrfbuild.cfg later."
+echo "Note that the path should not contain any spaces, as this poses a problem for linkgrib.csh"
+echo "Making it an absolute path is also HIGHLY recommended, though paths relative to the WPS"
+echo "directory *should* work"
 read metDir
+
+if [[ $metDir == *[[:space:]]* ]]; then
+    echo "WARNING: the path $metDir contains whitespace, this may break linkgrib.csh"
+fi
+
 echo "metDir='$metDir'" >> $outfile

@@ -3,10 +3,22 @@
 # This will be responsible for running all of the 
 # input data prep (WPS, NEI, MEGAN, MOZBC)
 
+# Input parsing - can override the default WPS directory to allow
+# WPS jobs to be split up over multiple jobs. To do this though we
+# need hard copies of modified namelists for it to work.
+if [[ -z $1 ]]; then
+    wpsdir="WPS"
+    lnknamelist=true
+else
+    wpsdir="$1"
+    lnknamelist=false
+fi
+
 mydir=$(dirname $0) # always find this directory, which should be PREPINPUT
 cd $mydir
 mydir=`pwd -P`
-pyprog="$mydir/../CONFIG/autowrf_namelist_main.py"
+pyprog="$mydir/../CONFIG/autowrf_namelist_main.py" #namelist control program
+pymet="$mydir/metgriblist.py"
 # This must contain definitions of the variables
 # metType and metDir. metType must match the ungrib
 # Vtable name. Source both.
@@ -14,30 +26,37 @@ pyprog="$mydir/../CONFIG/autowrf_namelist_main.py"
 # This ensures all necessary env. vars. are set
 . "$mydir/../envvar_wrfchem.cfg"
 
+# Find the root directory.
+rootdir=$(cd ../..; pwd -P)
+
 #############
 #### WPS ####
 #############
-
-cd "$mydir/../../WPS"
+cd "$rootdir/$wpsdir"
 
 # Ensure that the WPS namelist is linked to the one in the CONFIG folder
-if [ -e namelist.wps ]; then
-    # Back up only if not a link already
-    lnk=`readlink namelist.wps`
-    if [ ! -z $lnk ]; then
-        mv namelist.wps namelist.wps.autowrf-backup
+# This is not done if using an alternate WPS folder because the assumption
+# is that it is running split met periods, which requires separate WPS namelists
+# in each WPS run directory.
+if $lnknamelist; then
+    if [[ -e namelist.wps ]]; then
+        # Back up only if not a link already
+        lnk=`readlink namelist.wps`
+        if [[ ! -z $lnk ]]; then
+            mv namelist.wps namelist.wps.autowrf-backup
+        fi
     fi
+    ln -s "$mydir/../CONFIG/namelist.wps"
 fi
-ln -s "$mydir/../CONFIG/namelist.wps"
 
 # First make sure that the GEOGRID table is the ARW_CHEM table
 # and that the ungrib Vtable matches the requested meteorology
 #
 # Backup the GEOGRID.TBL link first. Need to see if it is a link
 cd geogrid
-if [ -f GEOGRID.TBL ]; then
+if [[ -f GEOGRID.TBL ]]; then
     lnk=$(readlink GEOGRID.TBL)
-    if [ -z $lnk ]; then
+    if [[ -z $lnk ]]; then
         cp GEOGRID.TBL GEOGRID.TBL.BACKUP
     else
         ln -s $lnk GEOGRID.TBL.BACKUP
@@ -49,9 +68,9 @@ ln -sf GEOGRID.TBL.ARW_CHEM GEOGRID.TBL
 cd ..
 
 # Now handle the ungrib Vtable link
-if [ -f Vtable ]; then
+if [[ -f Vtable ]]; then
     lnk=$(readlink Vtable)
-    if [ -z $lnk ]; then
+    if [[ -z $lnk ]]; then
         cp Vtable Vtable.BACKUP
     else
         ln -s $lnk Vtable.BACKUP
@@ -62,45 +81,99 @@ ln -sf ungrib/Variable_Tables/Vtable.${metType} Vtable
 
 
 # Begin by running geogrid
-./geogrid.exe >& "$mydir/../PREPLOGS/geogrid.log"
+# Log files use the WPS directory to identify WPS instances
+# running concurrently
+gglogfile="${wpsdir}_geogrid.log"
+./geogrid.exe >& "$mydir/../PREPLOGS/$gglogfile"
 ggexit=$?
-if [ $ggexit != 0 ]; then
-    echo "GEOGRID.exe failed with exit code $ggexit"
+if [[ $ggexit != 0 ]]; then
+    echo "In ${wpsdir}: GEOGRID.exe failed with exit code $ggexit"
     exit 1
 fi
 
-# Then ungrib. Need to link the met data first
-./link_grib.csh $metDir/$metType
+# Then ungrib. Need to link the met data first. We need to link only the
+# relevant files because ungrib isn't smart enough to only operate on
+# the relevant ones for all steps, meaning it can take unnecessarily
+# long if there's a lot of irrelevant met files. We have python code
+# to list those files, given start and end dates, but we need to extract
+# the start and end dates from the namelist manually to allow for the 
+# split-met functionality.
+regex='[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]:[0-9][0-9]:[0-9][0-9]'
+startline=$(grep 'start_date' namelist.wps)
+endline=$(grep 'end_date' namelist.wps)
+linkstop=false
+if [[ $startline =~ $regex ]]; then
+    startdate=${BASH_REMATCH[0]}
+else
+    echo "Could not find start date in namelist.wps" >&2
+    linkstop=true
+fi
+if [[ $endline =~ $regex ]]; then
+    enddate=${BASH_REMATCH[0]}
+else
+    echo "Could not find end date in namelist.wps" >&2
+    linkstop=true
+fi 
+
+# Generate the list of files to link
+if [[ $metDir == *[[:space:]]* ]]; then
+    echo ""
+    echo "WARNING: The directory with the met files ($metDir)"
+    echo "contains spaces. This will likely bread link_grib.csh."
+    echo ""
+fi
+
+flist=$(python "$pymet" "$metType" "$startdate" "$enddate")
+metfiles=""
+for f in $flist; do
+    metfiles="$metfiles ${metDir}/${f}"
+done
+
+rm -f GRIBFILE*
+./link_grib.csh $metfiles
+
 lnkexit=$?
-if [ $lnkexit != 0 ]; then
-    echo "LINK_GRIB.CSH failed with exit code $lnkexit"
+if [[ $lnkexit != 0 ]]; then
+    echo "In ${wpsdir}: LINK_GRIB.CSH failed with exit code $lnkexit"
+    exit 1
+elif [[ ! -e GRIBFILE.AAA ]]; then
+    echo "In ${wpsdir}: LINK_GRIB.CSH did not generate any valid GRIBFILE links."
     exit 1
 fi
-./ungrib.exe >& "$mydir/../PREPLOGS/ungrib.log"
+
+# Now run ungrib
+uglogfile="${wpsdir}_ungrib.log"
+./ungrib.exe >& "$mydir/../PREPLOGS/${uglogfile}"
 ugexit=$?
-if [ $ugexit != 0 ]; then
-    echo "UNGRIB.EXE failed with exit code $ugexit"
+if [[ $ugexit != 0 ]]; then
+    echo "In ${wpsdir}: UNGRIB.EXE failed with exit code $ugexit"
     exit 1
 fi
 
 # Finally metgrid
 rm -f met_em*
-./metgrid.exe >& "$mydir/../PREPLOGS/metgrid.log"
+mglogfile="${wpsdir}_metgrid.log"
+./metgrid.exe >& "$mydir/../PREPLOGS/${mglogfile}"
 mgexit=$?
-if [ $mgexit != 0 ]; then
-    echo "METGRID.EXE failed with exit code $mgexit"
+if [[ $mgexit != 0 ]]; then
+    echo "In ${wpsdir}: METGRID.EXE failed with exit code $mgexit"
     exit 1
 fi
 
-# Remove the intermediate files
+# Remove the intermediate files. PFILE seems to be a static
+# identifier, that doesn't seem to change with the prefix
 rm -f GRIBFILE*
 prefix="`python $pyprog get-wps-opt --no-quotes --prefix`"
 rm -f "${prefix}"*
-
+rm -f PFILE*
 # Now go over to the run directory and link this meteorology
 cd ../WRFV3/run
-rm -f met_em*
-p="../../WPS/met_em*"
+# Only remove if not running in split-met mode
+# Handle in splitwps if we are running in that mode
+if [[ $wpsdir == WPS ]]; then
+    rm -f met_em*
+fi
+p="$rootdir/$wpsdir/met_em*"
 for f in $p; do
     ln -s $f
 done
@@ -108,11 +181,15 @@ done
 # If using lat-lon map projection, then we need to modify the
 # WRF namelist permanently to account for the fact that the
 # dx dy in the WPS namelist is ONLY IN THAT CASE given in degrees
-# but the WRF namelist still expects meters
+# but the WRF namelist still expects meters. Further, only allow
+# this to edit the namelist if either a single instance of WPS
+# is supposed to be run ($wpsdir == WPS) or we're running the first
+# instance of WPS when it's been split up into smaller time
+# periods ($wpsdir == WPS_00)
 mapproj=`python $pyprog get-wps-opt --no-quotes --map_proj`
-if [ "$mapproj" == "lat-lon" ]; then
+if [[ "$mapproj" == "lat-lon" ]] && [[ $wpsdir == "WPS" ]] || [[ $wpsdir == "WPS_00" ]]; then
     which ncdump > /dev/null
-    if [ $? -ne 0 ]; then
+    if [[ $? -ne 0 ]]; then
         echo ""
         echo "***********************************************************************************"
         echo "WARNING: You are using a LAT-LON map projection and do not have NCDUMP on your path"
@@ -140,7 +217,7 @@ if [ "$mapproj" == "lat-lon" ]; then
             dyNum=${BASH_REMATCH[0]}
         fi
 
-        if [ -z "$dxNum" ] || [ -z "$dyNum" ]; then
+        if [[ -z "$dxNum" ]] || [[ -z "$dyNum" ]]; then
             echo ""
             echo "*****************************************************"
             echo "Failed to obtain DX or DY from the meteorology files."
