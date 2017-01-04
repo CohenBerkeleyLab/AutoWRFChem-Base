@@ -54,8 +54,7 @@ done
 PREPINPUT/precheck $pcargs
 chkexit=$?
 if [ $chkexit -ne 0 ]; then
-    echo "checked"
-#    exit $chkexit
+    exit $chkexit
 fi
 
 if $checkonly; then
