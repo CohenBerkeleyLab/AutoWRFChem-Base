@@ -6,6 +6,7 @@ import pickle
 import os
 from glob import glob
 import pdb
+import autowrf_consts as awc
 
 class Namelist:
     # These are used to format the output so that the domains are aligned
@@ -279,7 +280,11 @@ class WrfNamelist(Namelist):
 
 
 class WpsNamelist(Namelist):
+    # allowed_proj lists valid map projections that WPS will recognize
     allowed_proj = ("lambert", "mercator", "polar", "lat-lon")
+    # nei_proj must be a subset of allowed_proj, these are the projections
+    # that work with the emiss_v0x.F tool used to grid NEI emissions
+    nei_proj = ("lambert", "polar")
 
     def SetTimePeriod(self, startdate, enddate):
         curr_start, curr_end = self.GetTimePeriod()
@@ -329,6 +334,13 @@ class WpsNamelist(Namelist):
             time_parts = [0, 0, 0]
         return dt.datetime(date_parts[0], date_parts[1], date_parts[2], time_parts[0], time_parts[1], time_parts[2])
 
+    def SetMapProj(self, map_proj, neiproj=False):
+        # Special method to set map projection; needed since changing the projection
+        # alters what other options should be present in geogrid
+        # Setting neiproj to true will alter the messages printed if options are changed.
+        self.SetOptVal("geogrid", "map_proj", map_proj)
+        self.AdjustMapProjOpts(map_proj, neiproj)
+
     def MapProjOptions(self, map_proj):
         # Returns the necessary lat/lon settings for a given map projection as the first tuple
         # Returns all options specific to different projections as the second.
@@ -347,8 +359,9 @@ class WpsNamelist(Namelist):
 
         return proj_opts, all_opts
 
-    def AdjustMapProjOpts(self, map_proj):
+    def AdjustMapProjOpts(self, map_proj, neiproj=False):
         # Returns true if adjustment succeeded, false otherwise
+        # Setting neiproj to true will alter the messages printed if options are changed.
         proj_opts, all_opts = self.MapProjOptions(map_proj)
         # All these options are in the "geogrid" section
         curr_opts = self.opts["geogrid"].keys()
@@ -370,11 +383,15 @@ class WpsNamelist(Namelist):
             gdp_temp = self.opts["geogrid"].pop("geog_data_path", None)
             self.opts["geogrid"]["geog_data_path"] = gdp_temp
 
-        if opt_added:
+        if opt_added and not neiproj:
             print("New domain options added to WPS geogrid section for {0} projection - you will need to set them".format(map_proj))
-        if opt_removed:
+        if opt_removed and not neiproj:
             print("Domain options unecessary for {0} projection removed".format(map_proj))
         if opt_added or opt_removed:
+            if neiproj:
+                print("geogrid options have changed with the map projection.")
+                print("The NEI compatibility checker will help you set them.")
+
             junk = raw_input("Press ENTER to continue.")
 
 
@@ -533,6 +550,23 @@ class NamelistContainer:
         chem_type = UI.UserInputList("Choose a chemistry type: ", chem_types)
         if chem_type is not None:
             self.SetChem(chem_type)
+
+    def UserSetMapProj(self, neionly=False):
+        # Special method to set the WPS map projection that will present a list of options and
+        # tell the namelist to adjust the other options accordingly (some are not needed to certain
+        # projections)
+
+        if neionly:
+            proj_list = self.wps_namelist.nei_proj
+        else:
+            proj_list = self.wps_namelist.allowed_proj
+
+
+        optval = UI.UserInputList("Choose a map projection: ", proj_list,
+                                      currentvalue=self.wps_namelist.GetOptValNoSect("map_proj", 1, noquotes=True))
+        if optval is not None:
+            self.wps_namelist.SetMapProj(optval, neionly)
+
 
     def SetChem(self, chem_type):
         chem_opts = self.GetChemTypeOpts(chem_type)
@@ -793,15 +827,12 @@ class NamelistContainer:
             print("Note: {0} is usually set by choosing a meteorology type, not directly".format(opt))
 
         if opt == "map_proj":
-            optval = UI.UserInputList("Choose a map projection: ", namelist.allowed_proj,
-                                      currentvalue=namelist.GetOptValNoSect(opt, 1, noquotes=True))
+            self.UserSetMapProj()
         else:
             optval = UI.UserInputValue(opt, isbool=namelist.IsOptBool(sect, opt), currval=namelist.GetOptValNoSect(opt, 1))
 
-        if optval is not None:
-            namelist.SetOptVal(sect, opt, optval)
-            if opt == "map_proj":
-                namelist.AdjustMapProjOpts(optval)
+            if optval is not None:
+                namelist.SetOptVal(sect, opt, optval)
 
     def DisplayOptions(self, namelist):
         sectnames = namelist.opts.keys()
@@ -824,9 +855,31 @@ class NamelistContainer:
         curr_proj = self.wps_namelist.GetOptValNoSect("map_proj",1)
         if curr_proj not in ["'lambert'", "lambert", "'polar'", "polar"]:
             if UI.UserInputYN("map_proj must be 'lambert' or 'polar' for NEI emissions. Change it?"):
-                optval = UI.UserInputValue("map_proj", currval=curr_proj)
-                if optval is not None:
-                    self.wps_namelist.SetOptValNoSect("map_proj", optval)
+                self.UserSetMapProj(neionly=True)
+
+        wps_expect_opt = ["stand_lon", "ref_lon", "ref_lat", "truelat1", "truelat2", "dx", "dy"]
+        wrf_expect_opt = ["io_form_auxinput5", "io_style_emissions", "emiss_inpt_opt", "kemit"]
+        missing_opts = False
+        for opt in wps_expect_opt:
+            if not self.wps_namelist.IsOptInNamelist(opt):
+                print("Option {0} not found in WPS namelist".format(opt))
+                missing_opts = True
+        for opt in wrf_expect_opt:
+            if not self.wrf_namelist.IsOptInNamelist(opt):
+                print("Option {0} not found in WRF namelist".format(opt))
+                missing_opts = True
+
+        if missing_opts:
+            print("")
+            print("************************************************************************")
+            print("One or more expected options are missing from namelists")
+            print("This may be because an incompatible map projection was chosen")
+            print("Correct the map projection and try again.")
+            print("Note that polar projections have not been tested; if you are having")
+            print("issues with a polar projection, please open an issue at the GitHub repo:")
+            print(awc.repo)
+            print("************************************************************************")
+            return
 
         stand_lon = float(self.wps_namelist.GetOptValNoSect("stand_lon",1))
         ref_lon = float(self.wps_namelist.GetOptValNoSect("ref_lon",1))
