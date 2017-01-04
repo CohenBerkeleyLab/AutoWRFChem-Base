@@ -11,6 +11,9 @@
 
 BEGIN RADM2
     wrf:chem:chem_opt = 2
+    wrf:chem:io_style_emissions = 1
+    wrf:chem:emiss_inpt_opt = 1
+    wrf:chem:emiss_opt = 3
     wrf:chem:chem_in_opt = 0
     wrf:chem:phot_opt = 2
     wrf:chem:gas_drydep_opt = 1
@@ -33,6 +36,9 @@ END RADM2
 BEGIN R2SMH
 @ISKPP
     wrf:chem:chem_opt = 113
+    wrf:chem:io_style_emissions = 1
+    wrf:chem:emiss_inpt_opt = 1
+    wrf:chem:emiss_opt = 11
     wrf:chem:chem_in_opt = 0
     wrf:chem:phot_opt = 2
     wrf:chem:gas_drydep_opt = 1

@@ -9,6 +9,7 @@ checkonly=false
 finishonly=false
 metonly=false
 doreal=true # only used if metonly is true
+chemonly=false
 wpsargs=""
 dosplit=false
 splitargs=""
