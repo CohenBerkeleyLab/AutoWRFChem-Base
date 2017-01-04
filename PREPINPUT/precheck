@@ -3,17 +3,27 @@
 # Input Parsing
 
 metonly=false
-if [ ! -z "$1" ] && [ "$1" == "--met-only" ]; then
-    metonly=true
-fi
+chemonly=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+    --met-only)
+        metonly=true
+        ;;
+    --chem-only)
+        chemonly=true
+        ;;
+    esac
+    shift
+done
 
 # End Input parsing
 
 
 # Reference this script
-cd `dirname $0`
-mydir=`pwd -P`
-
+cd "$(dirname $0)"
+mydir="$(pwd -P)"
+rootdir="$(cd ../..; pwd -P)"
 pyprog="$mydir/../CONFIG/autowrf_namelist_main.py"
 
 # Ensure the PREPLOGS directory exists
@@ -70,67 +80,74 @@ else
     exit 1
 fi
 
-# Check the met directory from WPS since that's where it'll be called from
-cd ../../WPS
-wpsdir="$(pwd -P)"
-if [ ! -d "$metDir" ]; then
-    echo ""
-    echo "The directory supposedly containing the meteorology data"
-    echo "(metDir = $metDir)"
-    echo "does not exist. Fix it in $mydir/../wrfbuild.cfg."
-    badopts=true
-fi
-
-# Verify that the raw met files needed are present in the met directory
-wrfstart="$(python $pyprog get-wrf-opt --start-date)"
-wrfend="$(python $pyprog get-wrf-opt --end-date)"
-reqmetfiles=$(python "$mydir/metgriblist.py" "$metType" "$wrfstart" "$wrfend")
-cd "$metDir"
-missingMetFiles=""
-for metfile in $reqmetfiles; do
-    if [[ ! -f $metfile ]]; then
-        missingMetFiles="$missingMetFiles $metfile"
+if ! $chemonly; then
+    # Check the met directory from WPS since that's where it'll be called from
+    cd "$rootdir/WPS"
+    wpsdir="$(pwd -P)"
+    if [ ! -d "$metDir" ]; then
+        echo ""
+        echo "The directory supposedly containing the meteorology data"
+        echo "(metDir = $metDir)"
+        echo "does not exist. Fix it in $mydir/../wrfbuild.cfg."
+        badopts=true
+        nometdir=true
+    else
+        nometdir=false
     fi
-done
 
-if [[ ! -z $missingMetFiles ]]; then
-    echo "The following expected met files could not be found in"
-    echo "$metDir"
-    for f in $missingMetFiles; do
-        echo "    $f"
-    done
-    badopts=true
-else
-    echo "All raw met files found"
-fi
+    # Verify that the raw met files needed are present in the met directory
+    if ! $nometdir; then
+        wrfstart="$(python $pyprog get-wrf-opt --start-date)"
+        wrfend="$(python $pyprog get-wrf-opt --end-date)"
+        reqmetfiles=$(python "$mydir/metgriblist.py" "$metType" "$wrfstart" "$wrfend")
+        cd "$metDir"
+        missingMetFiles=""
+        for metfile in $reqmetfiles; do
+            if [[ ! -f $metfile ]]; then
+                missingMetFiles="$missingMetFiles $metfile"
+            fi
+        done
 
-# Need to go back to WPS directory so the relative paths work
-cd "$wpsdir"
+        if [[ ! -z $missingMetFiles ]]; then
+            echo "The following expected met files could not be found in"
+            echo "$metDir"
+            for f in $missingMetFiles; do
+                echo "    $f"
+            done
+            badopts=true
+        else
+            echo "All raw met files found"
+        fi
+    fi
 
-# Also check the geog_data_path and constants file
-geogpath="`python $pyprog get-wps-opt --no-quotes --geog_data_path`"
-if [ $? -ne 0 ]; then
-    echo ""
-    echo "The option 'geog_data_path' is not specified in the WPS namelist, and it should be."
-    badopts=true
-elif [ ! -d "$geogpath" ]; then
-    echo ""
-    echo "The WPS geog_data_path $geogpath is not a directory."
-    badopts=true
-fi
-constfile="`python $pyprog get-wps-opt --no-quotes --constants_name`"
-if [ $? -ne 0 ]; then
-    echo ""
-    echo "The option 'constants_name' is not specified in the WPS namelist, and it should be."
-    badopts=true
-elif [ ! -f "$constfile" ]; then
-    echo ""
-    echo "The WPS constants files $constfile does not exist."
-    badopts=true
+    # Need to go back to WPS directory so the relative paths work
+    cd "$wpsdir"
+
+    # Also check the geog_data_path and constants file
+    geogpath="`python $pyprog get-wps-opt --no-quotes --geog_data_path`"
+    if [ $? -ne 0 ]; then
+        echo ""
+        echo "The option 'geog_data_path' is not specified in the WPS namelist, and it should be."
+        badopts=true
+    elif [ ! -d "$geogpath" ]; then
+        echo ""
+        echo "The WPS geog_data_path $geogpath is not a directory."
+        badopts=true
+    fi
+    constfile="`python $pyprog get-wps-opt --no-quotes --constants_name`"
+    if [ $? -ne 0 ]; then
+        echo ""
+        echo "The option 'constants_name' is not specified in the WPS namelist, and it should be."
+        badopts=true
+    elif [ ! -f "$constfile" ]; then
+        echo ""
+        echo "The WPS constants files $constfile does not exist."
+        badopts=true
+    fi
 fi
 
 if ! $metonly; then
-    cd ../NEI
+    cd "$rootdir/NEI"
     ls 2011/area4k >& /dev/null
     areatst=$?
     ls 2011/point >& /dev/null
@@ -144,7 +161,7 @@ if ! $metonly; then
     fi
     # Check 2005 under certain conditions?
 
-    cd ../MEGAN
+    cd "$rootdir/MEGAN"
     ls data/lai* >& /dev/null
     megtst=$?
     if [ $megtst -ne 0 ]; then
@@ -156,7 +173,7 @@ if ! $metonly; then
     fi
 
     # Now check the MOZBC file
-    cd ../MOZBC
+    cd "$rootdir/MOZBC"
     if [ ! -f "data/$mozbcFile" ]; then
         echo ""
         echo "Cannot find data/$mozbcFile"
