@@ -3,6 +3,7 @@
 mydir=`dirname $0`
 cd "$mydir"
 mydir=`pwd -P`
+wrfrun="$mydir/../WRFV3/run"
 pyprog="$mydir/CONFIG/autowrf_namelist_main.py"
 
 checkonly=false
@@ -200,11 +201,16 @@ fi
 
 
 if $doconv; then
-    echo "Running convert_emiss.exe"
-    PREPINPUT/prepnei_convert
-    convexit=$?
-    if [ $convexit -eq 0 ]; then
-        exitstat=$((exitstat-8))
+    if [ -f $wrfrun/wrfem_00to12z_d01 -a -f $wrfrun/wrfem_12to24z_d01 ]; then
+        echo "Running convert_emiss.exe"
+        PREPINPUT/prepnei_convert
+        convexit=$?
+        if [ $convexit -eq 0 ]; then
+            exitstat=$((exitstat-8))
+        fi
+    else
+        echo "wrfem_00to12z_d01 and/or wrfem_12to24z_d01 not present in"
+        echo "$wrfrun, cannot execute convert_emiss.exe"
     fi
 else
     echo "wrfchemi files detected, skipping convert_emiss.exe"
