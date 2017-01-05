@@ -9,83 +9,65 @@ import pdb
 def MyPath():
     return os.path.dirname(os.path.abspath(__file__))
 
-def DomainsPath():
-    return os.path.join(MyPath(), "DOMAINS")
 
 def NamelistsPath():
     return os.path.join(MyPath(), "NAMELISTS")
 
-def Startup():
-    # Check if the DOMAINS and NAMELISTS subfolders exist already,
-    # create them if not
-    if not os.path.isdir(DomainsPath()):
-        os.mkdir(DomainsPath())
 
+wrf_namelist_template_file = os.path.join(MyPath(), "namelist.input.template")
+wps_namelist_template_file = os.path.join(MyPath(), "namelist.wps.template")
+
+
+def Startup():
+    # Check if the NAMELISTS subfolder exists already,
+    # create it if not
     if not os.path.isdir(NamelistsPath()):
         os.mkdir(NamelistsPath())
+
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
-def SelectWPSDomain():
-    files = os.listdir(DomainsPath())
-    domfiles = []
-    for f in files:
-        if f.startswith("namelist.wps"):
-            domfiles.append(f)
-
-    if len(domfiles) > 0:
-        wpsfile = UI.UserInputList("Choose the domain file to use: ", domfiles)
-        return os.path.join(DomainsPath(), wpsfile)
-    else:
-        print("No domain files found in {0}".format(DomainsPath()))
-        return None
 
 def SelectPreexistingNamelists():
     files = os.listdir(NamelistsPath())
-    wrffiles = []
-    wpsfiles = []
+    template_name = "Standard template"
+    wrffiles = [template_name]
+    wpsfiles = [template_name]
     for f in files:
         if f.startswith("namelist.input"):
             wrffiles.append(f)
         elif f.startswith("namelist.wps"):
             wpsfiles.append(f)
 
-    if len(wrffiles) > 0:
-        wrffile = UI.UserInputList("Choose the WRF namelist: ", wrffiles)
-        wrffile = os.path.join(NamelistsPath(), wrffile)
-    else:
-        print("No WRF namelists found in {0}".format(NamelistsPath()))
-        wrffile=None
+    # If the namelist container is given a None for the file, it will load the standard template
 
-    if len(wpsfiles) > 0:
-        wpsfile = UI.UserInputList("Choose the WPS namelist: ", wpsfiles)
+    print("Select the namelist files to use. If there is a discrepancy in the domain, the WPS file")
+    print("takes precedence.")
+    wrffile = UI.UserInputList("Choose the WRF namelist: ", wrffiles)
+    if wrffile == template_name:
+        wrffile = wrf_namelist_template_file
+    elif wrffile is not None:
+        wrffile = os.path.join(NamelistsPath(), wrffile)
+
+    wpsfile = UI.UserInputList("Choose the WPS namelist: ", wpsfiles)
+    if wpsfile == template_name:
+        wpsfile = wps_namelist_template_file
+    elif wpsfile is not None:
         wpsfile = os.path.join(NamelistsPath(), wpsfile)
-    else:
-        print("No WPS namelists found in {0}".format(NamelistsPath()))
-        wpsfile=None
 
     return wrffile, wpsfile
 
 def LoadMenu():
     opts = ["Load standard templates",
-            "Load a WPS domain",
-            "Load a pair of WPS/WRF namelists",
+            "Load existing namelists",
             "Modify the current namelists",
             "Quit"]
 
     loadmethod = UI.UserInputList("What namelist would you like to load?", opts, returntype="index")
     if loadmethod == 0:
-        return WRF.NamelistContainer()
+        return WRF.NamelistContainer(wrffile=wrf_namelist_template_file, wpsfile=wps_namelist_template_file)
     elif loadmethod == 1:
-        wpsfile = SelectWPSDomain()
-        if wpsfile is not None:
-            nlc = WRF.NamelistContainer(wpsfile=wpsfile)
-            nlc.UserSetMet()
-            return nlc
-        else:
-            return None
-    elif loadmethod == 2:
         wrffile, wpsfile = SelectPreexistingNamelists()
         if wrffile is not None and wpsfile is not None:
             nlc = WRF.NamelistContainer(wrffile=wrffile, wpsfile=wpsfile)
@@ -93,9 +75,9 @@ def LoadMenu():
             return nlc
         else:
             return None
-    elif loadmethod == 3:
+    elif loadmethod == 2:
         return WRF.NamelistContainer.LoadPickle()
-    elif loadmethod == 4:
+    elif loadmethod == 3:
         return None
 
 def PrintHelp(markstring):
@@ -255,12 +237,12 @@ if __name__ == "__main__":
     # other options can be modified by using their name as the flag, e.g. --bio_emiss_opt=3 will set bio_emiss_opt to 3
     # in the WRF namelist.
     #
-    # This program will create two folders in its directory the first time it runs, DOMAINS and NAMELISTS. DOMAINS is
-    # intended as a location that you can store WPS namelists that define various domains you are interested in.
-    # NAMELISTS on the other hand is where you can save WPS/WRF namelist pairs for future use.  The intention is that
-    # you can play around with WPS namelist options in the WPS directory, using the plotgrids.ncl utility to check if
-    # the domain is what you want, then copy/move that namelist (with some descriptive suffix) to DOMAINS to use later.
-    # NAMELISTS is intended to be a location where this program can save namelists at your command.
+    # This program will create the NAMELIST folder in its directory the first time it runs.
+    # NAMELISTS is where you can save WPS/WRF namelist pairs for future use.  This can take two forms. First, you could
+    # just save a WPS namelist there after playing with it in the WPS directory using the plotgrids utility to fine-
+    # tune your domain, then load that namelist with any WRF namelist (including the standard template) to use the
+    # domain with any preexisting settings. Alternately, you can save a pair of WPS/WRF namelist from within the program
+    # and load them later. The domain information in the WPS namelist always takes precedence.
 
     arg = sys.argv
 
@@ -305,7 +287,8 @@ if __name__ == "__main__":
                         wpsfile = os.path.join(NamelistsPath(), wpsfname)
                         nlc = WRF.NamelistContainer(met=metopt, wrffile=wrffile, wpsfile=wpsfile)
                     else:
-                        nlc = WRF.NamelistContainer(met=metopt)
+                        nlc = WRF.NamelistContainer(met=metopt, wrffile=wrf_namelist_template_file,
+                                                    wpsfile=wps_namelist_template_file)
 
                     nlc.WriteNamelists()
                     nlc.SavePickle()
@@ -525,26 +508,20 @@ if __name__ == "__main__":
 #   namelists are kept synchronized (e.g. e_we and e_sn). It also handles settings that relate to the choice of met data
 #   through your choice of met data.
 #
-#   When loading namelists, you are given four options:
+#   When loading namelists, you are given three options:
 #       1) Load standard templates: this reads the namelist.input.template and namelist.wps.template files in
 #       $MYDIR.
 #       These are configured to support NEI, MEGAN, and MOZBC immediately and use RADM2 chemistry.
 #
-#       2) Load a WPS domain: You can place WPS namelists in
-#       $MYDIR/DOMAINS
-#       which will be generated the first time this program is run. Files in this directory should start with
-#       "namelist.wps". When you choose this option, it will list the namelist.wps files in DOMAINS and allow you to
-#       choose one. When you do, it loads that WPS file and the standard WRF namelist template, then copies the domain
-#       info into the WRF namelist. This is very useful if you want to use the plotgrid.ncl utility in WPS to quickly
-#       figure out your domain, then copy that domain to use with this program.
-#
-#       3) Load a pair of WPS/WRF namelists: Namelists can also go in
+#       2) Load a pair of WPS/WRF namelists: Namelists go in
 #       $MYDIR/NAMELISTS
-#       although it is more intended that you will allow this program to save them there. Similarly to #2, this will
-#       then ask you to choose, in this case, both a WPS and WRF namelist file. You can use this feature to quickly
-#       switch between chemistry or domain choices.
+#       either manually or from within the program. Note that WRF namelists must begin with "namelist.input" and WPS
+#       namelists must begin with "namelist.wps" to be recognized by the program. The program will
+#       then ask you to choose, both a WPS and WRF namelist file. You can use this feature to quickly
+#       switch between chemistry or domain choices.  If the domain or time settings in the WPS and WRF namelist differ,
+#       the WPS namelist takes precedence.
 #
-#       4) Modify the current namelists: This will load the current namelists without any temporary changes. (More on
+#       3) Modify the current namelists: This will load the current namelists without any temporary changes. (More on
 #       those below).
 #
 #   Once you have loaded your namelists, you will be presented with a list of options to check or change. These are

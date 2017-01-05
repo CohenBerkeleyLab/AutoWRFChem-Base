@@ -446,9 +446,7 @@ class NamelistContainer:
     # common to both are kept in sync
     my_dir = os.path.dirname(__file__)
     wrf_namelist_outfile = "namelist.input"
-    wrf_namelist_template_file = os.path.join(my_dir, "namelist.input.template")
     wps_namelist_outfile = "namelist.wps"
-    wps_namelist_template_file = os.path.join(my_dir, "namelist.wps.template")
     pickle_file = os.path.join(my_dir, "namelist_pickle.pkl")
     cfg_fname = os.path.join(my_dir,"..","wrfbuild.cfg")
     envvar_fname = os.path.join(my_dir,"..","envvar_wrfchem.cfg")
@@ -457,7 +455,7 @@ class NamelistContainer:
 
     # List of options (besides the dates) duplicated in WRF and WPS
     domain_opts = ["e_we", "e_sn", "dx", "dy", "parent_id", "parent_grid_ratio", "i_parent_start", "j_parent_start"]
-    met_opts = ["interval_seconds", "p_top_requested", "e_vert", "num_metgrid_levels", "num_metgrid_soil_levels"]
+    met_opts = ["interval_seconds", "p_top_requested", "e_vert", "num_metgrid_levels", "num_metgrid_soil_levels", "gfdda_interval_m"]
     date_opts = ["run_days", "run_hours", "run_minutes", "run_seconds", "start_year", "start_month", "start_day",
                  "start_hour", "start_minute", "start_second", "end_year", "end_month", "end_day", "end_hour",
                  "end_minute", "end_second", "start_date", "end_date"]
@@ -467,12 +465,12 @@ class NamelistContainer:
         # namelists. "mod" will load the pickled current namelist - which can be used if the program needs to make
         # temporary changes to the namelist to produce part of the input without losing the user defined settings
         if wrffile is None:
-            self.wrf_namelist = WrfNamelist(self.wrf_namelist_template_file)
+            raise TypeError("A wrffile must be specified")
         else:
             self.wrf_namelist = WrfNamelist(wrffile)
 
         if wpsfile is None:
-            self.wps_namelist = WpsNamelist(self.wps_namelist_template_file)
+            raise TypeError("A wpsfile must be specified")
         else:
             self.wps_namelist = WpsNamelist(wpsfile)
 
