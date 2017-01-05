@@ -217,6 +217,22 @@ class Namelist:
 
 
 class WrfNamelist(Namelist):
+    def __init__(self, namelist_file):
+        Namelist.__init__(self, namelist_file)
+        #pdb.set_trace()
+        # Is gfdda_end_h an option in the namelist? If not, we don't need to see if it should be updated with the run
+        # time
+        self.update_fdda_end = False
+        if self.IsOptInNamelist("gfdda_end_h"):
+            # Compare the end time to the run time. If they are close (within 1 hr) then it is likely that the FDDA end
+            # time was meant to be the same as the run time (i.e. use FDDA for the entire run).
+            rtime = self.GetRunTime(runtime_unit="hours")
+            gfdda_end = float(self.GetOptVal("fdda", "gfdda_end_h", domainnum=1))
+            if abs(rtime - gfdda_end) < 1.0:
+                self.update_fdda_end = True
+                print("Keeping gfdda_end equal to run time. To stop this, set its value manually")
+                print("(do not choose 'y' when asked whether to use it for the entire run)")
+
     def SetTimePeriod(self, startdate, enddate):
         curr_start, curr_end = self.GetTimePeriod()
         if startdate is None:
@@ -259,7 +275,16 @@ class WrfNamelist(Namelist):
         self.SetOptVal("time_control", "run_minutes", hms[1])
         self.SetOptVal("time_control", "run_seconds", hms[2])
 
-    def GetTimePeriod(self):
+        # Keep the FDDA end time the same as the run time (if desired) so that FDDA nudging is used through the whole
+        # model run
+        if self.update_fdda_end:
+            run_time = int(math.ceil(self.GetRunTime(runtime_unit="hours")))
+            self.SetOptVal("fdda", "gfdda_end_h", run_time)
+
+    def GetTimePeriod(self, runtime_unit="days"):
+        # Returns start and end dates as datetime objects and the runtime
+        # in days as a float. Can override the runtime unit to be "days",
+        # "hours", "minutes", or "seconds"
         sy = int(self.GetOptVal("time_control", "start_year", domainnum=1))
         sm = int(self.GetOptVal("time_control", "start_month", domainnum=1))
         sd = int(self.GetOptVal("time_control", "start_day", domainnum=1))
@@ -276,7 +301,28 @@ class WrfNamelist(Namelist):
 
         start_date = dt.datetime(sy, sm, sd, shr, smin, ssec)
         end_date = dt.datetime(ey, em, ed, ehr, emin, esec)
+
         return start_date, end_date
+
+    def GetRunTime(self, runtime_unit="days"):
+        rdays = float(self.GetOptVal("time_control", "run_days", domainnum=1))
+        rhrs = float(self.GetOptVal("time_control", "run_hours", domainnum=1))
+        rmins = float(self.GetOptVal("time_control", "run_minutes", domainnum=1))
+        rsecs = float(self.GetOptVal("time_control", "run_seconds", domainnum=1))
+
+        runtime = rdays + rhrs/24.0 + rmins/(24.0*60.0) + rsecs/(24.0*60.0*60.0)
+        if runtime_unit == "days":
+            pass # no calculation necessary
+        elif runtime_unit == "hours":
+            runtime *= 24.0
+        elif runtime_unit == "minutes":
+            runtime_unit *= 24.0*60.0
+        elif runtime_unit == "seconds":
+            runtime *= 24.0*60.0*60.0
+        else:
+            raise ValueError("runtime_unit '{0}' is invalid.".format(runtime_unit))
+
+        return runtime
 
 
 class WpsNamelist(Namelist):
@@ -519,10 +565,20 @@ class NamelistContainer:
                                format(met_type, ', '.join(self.GetTypeList(self.met_fname))))
 
         met_opts = self.GetMetTypeOpts(met_type)
+        missing_opts = []
         if met_opts is not None:
             for opt in met_opts:
                 nl = opt["namelist"]
-                nl.SetOptVal(opt["section"], opt["name"], opt["value"])
+                if nl.IsOptInNamelist(opt["name"]):
+                    nl.SetOptVal(opt["section"], opt["name"], opt["value"])
+                else:
+                    missing_opts.append(opt)
+
+        if len(missing_opts) > 0:
+            print("The following options were not in the namelist:")
+            for opt in missing_opts:
+                print("    {0}/{1}".format(opt["section"], format(opt["name"])))
+            print("This may not be a problem, if these are optional settings")
 
         # Also make sure that the met choice is reflected in the wrfbuild.cfg file which *should* be one level up
 
@@ -566,6 +622,22 @@ class NamelistContainer:
                                       currentvalue=self.wps_namelist.GetOptValNoSect("map_proj", 1, noquotes=True))
         if optval is not None:
             self.wps_namelist.SetMapProj(optval, neionly)
+
+    def UserSetFDDAEnd(self):
+
+        whole_run = UI.UserInputYN("Use FDDA nudging for the entire run?")
+        if whole_run:
+            run_hours = self.wrf_namelist.GetRunTime(runtime_unit="hours")
+            run_hours = int(math.ceil(run_hours))
+            self.wrf_namelist.SetOptVal("fdda", "gfdda_end_h", run_hours)
+            self.wrf_namelist.update_fdda_end = True
+            print("gfdda_end_h set to {0}".format(run_hours))
+        else:
+            self.wrf_namelist.update_fdda_end = False
+            optval = UI.UserInputValue("gfdda_end_h", currval=self.wrf_namelist.GetOptValNoSect("gfdda_end_h", 1))
+
+            if optval is not None:
+                self.wrf_namelist.SetOptVal("fdda", "gfdda_end_h", optval)
 
 
     def SetChem(self, chem_type):
@@ -828,6 +900,8 @@ class NamelistContainer:
 
         if opt == "map_proj":
             self.UserSetMapProj()
+        elif opt == "gfdda_end_h":
+            self.UserSetFDDAEnd()
         else:
             optval = UI.UserInputValue(opt, isbool=namelist.IsOptBool(sect, opt), currval=namelist.GetOptValNoSect(opt, 1))
 

@@ -21,4 +21,5 @@ BEGIN NARR
     wrf:domains:e_vert = 30
     wrf:domains:num_metgrid_levels = 30
     wrf:domains:num_metgrid_soil_levels = 4
+    wrf:fdda:gfdda_interval_m = 180
 END NARR
