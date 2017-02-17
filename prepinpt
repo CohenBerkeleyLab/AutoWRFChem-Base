@@ -147,16 +147,28 @@ cd "$mydir"
 # 8 = convert_emiss
 # 16 = MEGAN
 # 32 = MOZBC
+# 64 = postcheck.py - should run for any case
 # 1 = real.exe after WPS during met-only
+exitstat=64
 if $metonly && $doreal; then
-    exitstat=3
-elif $metonly; then
-    exitstat=2
-elif $chemonly; then
-    exitstat=60
-else
-    exitstat=62
+    exitstat=$((exitstat+1))
 fi
+if $dowps; then
+    exitstat=$((exitstat+2))
+fi
+if $doemiss; then
+    exitstat=$((exitstat+4))
+fi
+if $doconv; then
+    exitstat=$((exitstat+8))
+fi
+if $domegan; then
+    exitstat=$((exitstat+16))
+fi
+if $domozbc; then
+    exitstat=$((exitstat+32))
+fi
+
 
 if $dowps; then
     echo "Running WPS..."
@@ -167,7 +179,6 @@ if $dowps; then
     fi
 else
     echo "Not running WPS, either met files exist or chem-only requested."
-    exitstat=$((exitstat-2))
 fi
 
 if $metonly; then
@@ -196,7 +207,6 @@ if $doemiss; then
     fi
 else
     echo "wrfem files found, skipping emiss_v04"
-    exitstat=$((exitstat-4))
 fi
 
 
@@ -214,7 +224,6 @@ if $doconv; then
     fi
 else
     echo "wrfchemi files detected, skipping convert_emiss.exe"
-    exitstat=$((exitstat-8))
 fi
     
 if $domegan; then
@@ -226,7 +235,6 @@ if $domegan; then
     fi
 else
     echo "wrfbiochemi file found, skipping MEGAN"
-    exitstat=$((exitstat-16))
 fi
     
 if $domozbc; then
@@ -236,6 +244,16 @@ if $domozbc; then
     if [ $mozbcexit -eq 0 ]; then
         exitstat=$((exitstat-32))
     fi
+
+    postchk_mode="both"
+else
+    postchk_mode="met"
+fi
+
+python "$mydir/PREPINPUT/postcheck.py" --mode=$postchk_mode "$wrfrun/wrfinput_d01" "$wrfrun/wrfbdy_d01"
+postexit=$?
+if [ $postexit -eq 0 ]; then
+    exitstat=$((exitstat-64))
 fi
 
 exit $exitstat
