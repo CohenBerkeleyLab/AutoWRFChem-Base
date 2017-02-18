@@ -80,6 +80,10 @@ else
     exit 1
 fi
 
+# We'll need these a couple places
+wrfstart="$(python $pyprog get-wrf-opt --start-date)"
+wrfend="$(python $pyprog get-wrf-opt --end-date)"
+
 if ! $chemonly; then
     # Check the met directory from WPS since that's where it'll be called from
     cd "$rootdir/WPS"
@@ -97,8 +101,6 @@ if ! $chemonly; then
 
     # Verify that the raw met files needed are present in the met directory
     if ! $nometdir; then
-        wrfstart="$(python $pyprog get-wrf-opt --start-date)"
-        wrfend="$(python $pyprog get-wrf-opt --end-date)"
         reqmetfiles=$(python "$mydir/metgriblist.py" "$metType" "$wrfstart" "$wrfend")
         cd "$metDir"
         missingMetFiles=""
@@ -116,7 +118,7 @@ if ! $chemonly; then
             done
             badopts=true
         else
-            echo "All raw met files found"
+            echo "Pass: All raw met files found"
         fi
     fi
 
@@ -127,22 +129,26 @@ if ! $chemonly; then
     geogpath="`python $pyprog get-wps-opt --no-quotes --geog_data_path`"
     if [ $? -ne 0 ]; then
         echo ""
-        echo "The option 'geog_data_path' is not specified in the WPS namelist, and it should be."
+        echo "Fail: The option 'geog_data_path' is not specified in the WPS namelist, and it should be."
         badopts=true
     elif [ ! -d "$geogpath" ]; then
         echo ""
-        echo "The WPS geog_data_path $geogpath is not a directory."
+        echo "Fail: The WPS geog_data_path $geogpath is not a directory."
         badopts=true
+    else:
+        echo "Pass: WPS geog_data_path is a directory"
     fi
     constfile="`python $pyprog get-wps-opt --no-quotes --constants_name`"
     if [ $? -ne 0 ]; then
         echo ""
-        echo "The option 'constants_name' is not specified in the WPS namelist, and it should be."
+        echo "Fail: The option 'constants_name' is not specified in the WPS namelist, and it should be."
         badopts=true
     elif [ ! -f "$constfile" ]; then
         echo ""
-        echo "The WPS constants files $constfile does not exist."
+        echo "Fail: The WPS constants file $constfile does not exist."
         badopts=true
+    else
+        echo "Pass: WPS constants file found."
     fi
 fi
 
@@ -154,10 +160,13 @@ if ! $metonly; then
     pointtst=$?
     if [ $areatst -ne 0 -o $pointtst -ne 0 ]; then
         echo ""
-        echo "Could not find 2011/area4k and/or 2011/point in NEI."
+        echo "Fail: Could not find 2011/area4k and/or 2011/point in NEI."
         echo "Is the directory 2011 present or linked there?"
         echo "Does it contain area4k and point as immediate subdirectories?"
         badopts=true
+    else
+        echo ""
+        echo "Pass: Found NEI/2011/area4k and NEI/2011/point"
     fi
     # Check 2005 under certain conditions?
 
@@ -166,10 +175,13 @@ if ! $metonly; then
     megtst=$?
     if [ $megtst -ne 0 ]; then
         echo ""
-        echo "Could not find any lai* files under data/ in MEGAN."
+        echo "Fail: Could not find any lai* files under data/ in MEGAN."
         echo "Is data a directory in MEGAN that contains the MEGAN data,"
         echo "or a link to such a directory?"
         badopts=true
+    else
+        echo ""
+        echo "Pass: Found lai* files under MEGAN/data."
     fi
 
     # Now check the MOZBC file
@@ -180,6 +192,18 @@ if ! $metonly; then
         echo "from the MOZBC directory. Is the data directory or link present?"
         echo "If so, is the file directly in that directory (not a subdirectory?)"
         badopts=true
+    fi
+
+    echo ""
+    python "$mydir/mozcheck.py" "$rootdir/MOZBC/data/$mozbcFile" "$rootdir/WRFV3/run/wrfinput_d01" "$wrfend" "$wrfstart"
+    moztst=$?
+    if [ $moztst -ne 0 ]; then
+        echo ""
+        echo "Fail: See above problems with MOZBC input file." 
+        echo "Choose a different file with autowrfchem config namelist."
+        badopts=true
+    else
+        echo "Pass: MOZBC meets safety check (10 deg buffer around domain, time period checked)"
     fi
 fi
 
