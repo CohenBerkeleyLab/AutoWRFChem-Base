@@ -39,6 +39,7 @@ def get_var_names(filename):
     else:
         rgrp = ncdat(filename)
         return rgrp.variables.keys()
+        rgrp.close()
 
 def get_var_values(varnames, filename):
     if use_ncdump:
@@ -48,6 +49,7 @@ def get_var_values(varnames, filename):
         rgrp = ncdat(filename)
         for var in varnames:
             var_vals[var] = rgrp.variables[var][:]
+        rgrp.close()
     return var_vals
             
 

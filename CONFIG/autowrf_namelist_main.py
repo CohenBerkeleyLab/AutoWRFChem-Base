@@ -257,6 +257,7 @@ if __name__ == "__main__":
             pass
         SaveMenu(nlc)
     if len(arg) > 1:
+        WRF.DEBUG_LEVEL=0 #turn off normal messages from the classlib interface to prevent sending erroneous strings into the shell
         if arg[1] == "-h" or arg[1] == "--help":
             PrintHelp("DOC")
             print("Allowed met types are: ", end="")
