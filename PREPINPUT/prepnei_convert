@@ -12,16 +12,26 @@ cd `dirname $0`
 mydir=`pwd -P`
 
 pyprog="$mydir/../CONFIG/autowrf_namelist_main.py"
+pyemiyr="$mydir/bestemissyear.py"
 # Now temporarily reset both the run time and the bio_emiss_opt
 # Need to use 11 h runtime (and make sure that convert_emiss doesn't ACTUALLY
 # look at the run time) because that's the best way to get end hour = 11 and
 # keep the python program consistent.
+#
+# Also for a run that spans multiple years we have to be a little tricky about 
+# how we handle the date, since we automatically scale the emissions by year.
+# In 
 if [[ $FDDA_ON == 1 ]]; then
     fdda_args="$pyargs --grid_fdda=0"
 else
     fdda_args=""
 fi
-python $pyprog tempmod --start-date=00:00:00 --run-time=11h --bio_emiss_opt=0 $fdda_args
+
+run_sdate=$(python $pyprog get-wps-opt --no-quotes --start_date)
+run_edate=$(python $pyprog get-wps-opt --no-quotes --end_date)
+
+emi_sdate=$(python $pyemiyr 00z run_sdate run_edate)
+python $pyprog tempmod --start-date=${emi_sdate} --run-time=11h --bio_emiss_opt=0 $fdda_args
 # Now we go over to the run directory. Backup any existing wrfchemi files, then
 # run real.exe followed by convert_emiss.exe
 cd ../../WRFV3/run
@@ -66,7 +76,8 @@ if [ ! -f wrfchemi_00z_d01 ]; then
 fi
 
 # Now set up for the second 12 hr segment
-python $pyprog tempmod --start-date=12:00:00 --run-time=11h --bio_emiss_opt=0 $fdda_args
+emi_sdate=$(python $pyemiyr 00z run_sdate run_edate)
+python $pyprog tempmod --start-date=${emi_edate} --run-time=11h --bio_emiss_opt=0 $fdda_args
 
 ./real.exe
 realexit=$?

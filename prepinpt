@@ -149,7 +149,7 @@ cd "$mydir"
 # 32 = MOZBC
 # 64 = postcheck.py - should run for any case
 # 1 = real.exe after WPS during met-only
-exitstat=64
+exitstat=0
 if $metonly && $doreal; then
     exitstat=$((exitstat+1))
 fi
@@ -168,6 +168,7 @@ fi
 if $domozbc; then
     exitstat=$((exitstat+32))
 fi
+
 
 
 if $dowps; then
@@ -190,6 +191,12 @@ if $metonly; then
             realexit=$?
             if [ $realexit -eq 0 ]; then
                 exitstat=$((exitstat-1))
+            fi
+            
+            python "$mydir/PREPINPUT/postcheck.py" --mode=met "$wrfrun/wrfinput_d01" "$wrfrun/wrfbdy_d01"
+            postexit=$?
+            if [ $postexit -ne 0 ]; then
+                exitstat=$((exitstat+64))
             fi
         else
             echo "WPS failed, not running real.exe."
@@ -252,8 +259,8 @@ fi
 
 python "$mydir/PREPINPUT/postcheck.py" --mode=$postchk_mode "$wrfrun/wrfinput_d01" "$wrfrun/wrfbdy_d01"
 postexit=$?
-if [ $postexit -eq 0 ]; then
-    exitstat=$((exitstat-64))
+if [ $postexit -ne 0 ]; then
+    exitstat=$((exitstat+64))
 fi
 
 exit $exitstat
