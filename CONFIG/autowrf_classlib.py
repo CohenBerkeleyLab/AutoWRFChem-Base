@@ -8,6 +8,12 @@ from glob import glob
 import pdb
 import autowrf_consts as awc
 
+DEBUG_LEVEL=1
+
+def msg_print(msg):
+    if DEBUG_LEVEL > 0:
+        print(msg)
+
 class Namelist:
     # These are used to format the output so that the domains are aligned
     opt_field_width = 36
@@ -230,8 +236,8 @@ class WrfNamelist(Namelist):
             gfdda_end = float(self.GetOptVal("fdda", "gfdda_end_h", domainnum=1))
             if abs(rtime - gfdda_end) < 1.0:
                 self.update_fdda_end = True
-                print("Keeping gfdda_end equal to run time. To stop this, set its value manually")
-                print("(do not choose 'y' when asked whether to use it for the entire run)")
+                msg_print("Keeping gfdda_end equal to run time. To stop this, set its value manually")
+                msg_print("(do not choose 'y' when asked whether to use it for the entire run)")
 
     def SetTimePeriod(self, startdate, enddate):
         curr_start, curr_end = self.GetTimePeriod()
@@ -400,7 +406,7 @@ class WpsNamelist(Namelist):
         elif map_proj == "lat-lon":
             proj_opts = ("pole_lat", "pole_lon", "stand_lon")
         else:
-            print("{0} is not a recognized map projection".format(map_proj))
+            msg_print("{0} is not a recognized map projection".format(map_proj))
             proj_opts = None
 
         return proj_opts, all_opts
@@ -430,13 +436,13 @@ class WpsNamelist(Namelist):
             self.opts["geogrid"]["geog_data_path"] = gdp_temp
 
         if opt_added and not neiproj:
-            print("New domain options added to WPS geogrid section for {0} projection - you will need to set them".format(map_proj))
+            msg_print("New domain options added to WPS geogrid section for {0} projection - you will need to set them".format(map_proj))
         if opt_removed and not neiproj:
-            print("Domain options unecessary for {0} projection removed".format(map_proj))
+            msg_print("Domain options unecessary for {0} projection removed".format(map_proj))
         if opt_added or opt_removed:
             if neiproj:
-                print("geogrid options have changed with the map projection.")
-                print("The NEI compatibility checker will help you set them.")
+                msg_print("geogrid options have changed with the map projection.")
+                msg_print("The NEI compatibility checker will help you set them.")
 
             junk = raw_input("Press ENTER to continue.")
 
@@ -509,7 +515,7 @@ class NamelistContainer:
             with open(NamelistContainer.pickle_file, 'rb') as pf:
                 return pickle.load(pf)
         else:
-            print("No existing namelist found, loading standard template")
+            msg_print("No existing namelist found, loading standard template")
             return NamelistContainer()
 
     def SetTimePeriod(self, starttime, endtime):
@@ -541,7 +547,7 @@ class NamelistContainer:
 
         self.SetTimePeriod(start_time, end_time)
 
-        print("Having modified the time period, verify that the correct MOZBC data file has been selected.")
+        msg_print("Having modified the time period, verify that the correct MOZBC data file has been selected.")
         NamelistContainer.UserSetMozFile()
 
     def UserSetDomain(self):
@@ -550,7 +556,7 @@ class NamelistContainer:
             if optval is not None:
                 self.wrf_namelist.SetOptValNoSect(opt, optval)
                 self.wps_namelist.SetOptValNoSect(opt, optval)
-        print("Having modified the domain, verify that the correct MOZBC data file has been selected.")
+        msg_print("Having modified the domain, verify that the correct MOZBC data file has been selected.")
         NamelistContainer.UserSetMozFile()
 
     def UserSetMet(self):
@@ -573,10 +579,10 @@ class NamelistContainer:
                     missing_opts.append(opt)
 
         if len(missing_opts) > 0:
-            print("The following options were not in the namelist:")
+            msg_print("The following options were not in the namelist:")
             for opt in missing_opts:
-                print("    {0}/{1}".format(opt["section"], format(opt["name"])))
-            print("This may not be a problem, if these are optional settings")
+                msg_print("    {0}/{1}".format(opt["section"], format(opt["name"])))
+            msg_print("This may not be a problem, if these are optional settings")
 
         # Also make sure that the met choice is reflected in the wrfbuild.cfg file which *should* be one level up
 
@@ -591,14 +597,14 @@ class NamelistContainer:
                     else:
                         cfgw.write(l)
         else:
-            print("Warning: could not find the wrfbuild.cfg file to ensure the meteorology is consistent.")
-            print("Check that the meteorology is correct in that file before running WPS.")
+            msg_print("Warning: could not find the wrfbuild.cfg file to ensure the meteorology is consistent.")
+            msg_print("Check that the meteorology is correct in that file before running WPS.")
 
     def UserSetChem(self):
         self.CheckTypeListFormat(self.chem_fname)
         chem_types = self.GetTypeList(self.chem_fname)
         if len(chem_types) == 0:
-            print("No chem types defined in {0}".format(self.chem_fname))
+            msg_print("No chem types defined in {0}".format(self.chem_fname))
             return
 
         chem_type = UI.UserInputList("Choose a chemistry type: ", chem_types)
@@ -629,7 +635,7 @@ class NamelistContainer:
             run_hours = int(math.ceil(run_hours))
             self.wrf_namelist.SetOptVal("fdda", "gfdda_end_h", run_hours)
             self.wrf_namelist.update_fdda_end = True
-            print("gfdda_end_h set to {0}".format(run_hours))
+            msg_print("gfdda_end_h set to {0}".format(run_hours))
         else:
             self.wrf_namelist.update_fdda_end = False
             optval = UI.UserInputValue("gfdda_end_h", currval=self.wrf_namelist.GetOptValNoSect("gfdda_end_h", 1))
@@ -710,12 +716,12 @@ class NamelistContainer:
                         if "WRF_KPP" in line and "=1" in line:
                             found_kpp = True
                 if not found_kpp:
-                    print("** Note: {0} requires WRF to be compiled with KPP enabled but WRF_KPP is not set to 1 in".format(chem_type))
-                    print(self.envvar_fname)
+                    msg_print("** Note: {0} requires WRF to be compiled with KPP enabled but WRF_KPP is not set to 1 in".format(chem_type))
+                    msg_print(self.envvar_fname)
                     if not UI.UserInputYN("Do you still wish to choose this chemistry?", default="n"):
                         return None
             else:
-                print("** Note: {0} requires WRF to be compiled with KPP enabled. Could not find\n"
+                msg_print("** Note: {0} requires WRF to be compiled with KPP enabled. Could not find\n"
                       "{1}\n"
                       "to ensure that the env. variable WRF_KPP is set.\n"
                       "Be sure KPP is enabled when you configure WRF.".format(chem_type, self.envvar_fname))
@@ -765,26 +771,26 @@ class NamelistContainer:
                     begin_chem = line.replace("BEGIN","").strip()
                     found_chem_opt = False
                 elif "BEGIN" in line and looking_for_end:
-                    print("   Warning reading {1}: BEGIN at line {0} has no matching END".format(begin_lnum, list_shortfile))
+                    msg_print("   Warning reading {1}: BEGIN at line {0} has no matching END".format(begin_lnum, list_shortfile))
                     found_chem_opt = False
 
                 if "END" in line and looking_for_end:
                     if begin_chem != line.replace("END","").strip():
-                        print("   Warning reading {4}: BEGIN {0} at line {1} matches {2} at line {3}"
+                        msg_print("   Warning reading {4}: BEGIN {0} at line {1} matches {2} at line {3}"
                               " (label mismatch)".format(begin_chem, begin_lnum, line.strip(), line_num, list_shortfile))
                     looking_for_end = False
                 elif "END" in line and not looking_for_end:
-                    print("   Warning reading {1}: END at line {0} has no matching BEGIN".format(line_num, list_shortfile))
+                    msg_print("   Warning reading {1}: END at line {0} has no matching BEGIN".format(line_num, list_shortfile))
 
                 if "END" in line and list_shortfile == "chemlist.txt" and not found_chem_opt:
-                    print("   Warning reading {1}: No value for chem_opt found for {0}".format(begin_chem, list_shortfile))
+                    msg_print("   Warning reading {1}: No value for chem_opt found for {0}".format(begin_chem, list_shortfile))
 
                 if "=" in line:
                     lsplit = line.split("=")
                     optid = [v for v in lsplit[0].strip().split(":") if v != ""]
 
                     if len(optid) != 3:
-                        print("   Warning reading {0}: any option must specify namelist, section, and option name"
+                        msg_print("   Warning reading {0}: any option must specify namelist, section, and option name"
                               " separated by colons. Line {1} does not.".format(list_shortfile, line_num))
 
                     if optid[0] == "wrf":
@@ -792,7 +798,7 @@ class NamelistContainer:
                     elif optid[0] == "wps":
                         nl = self.wps_namelist
                     else:
-                        print("   Warning reading {0}: '{1}' is not a recognized namelist (line {2})".
+                        msg_print("   Warning reading {0}: '{1}' is not a recognized namelist (line {2})".
                               format(list_shortfile, optid[0], line_num))
                         continue
 
@@ -800,21 +806,21 @@ class NamelistContainer:
                     optname = optid[2]
 
                     if len(optname) == 0:
-                        print("   Warning reading {1}: no option name before the = in line {0}".format(line_num, list_shortfile))
+                        msg_print("   Warning reading {1}: no option name before the = in line {0}".format(line_num, list_shortfile))
                     elif not nl.IsSectionInNamelist(optsect):
-                        print("   Warning reading {0}: {1} is not a valid {2} namelist section (line {3})".
+                        msg_print("   Warning reading {0}: {1} is not a valid {2} namelist section (line {3})".
                               format(list_shortfile, optsect, optid[0], line_num))
                     elif not nl.IsOptInSection(optsect, optname):
-                        print("   Warning reading {0}: {1}:{2} is an unknown {3} namelist section/option pair (line {4})".
+                        msg_print("   Warning reading {0}: {1}:{2} is an unknown {3} namelist section/option pair (line {4})".
                               format(list_shortfile, optsect, optname, optid[0], line_num, ))
                     elif optname == "chem_opt":
                         found_chem_opt = True
 
                     optvals = [v for v in lsplit[1].strip().split(" ") if v != ""]
                     if len(optvals) == 0:
-                        print("   Warning reading {1}: no option value after the = in line {0}".format(line_num, list_shortfile))
+                        msg_print("   Warning reading {1}: no option value after the = in line {0}".format(line_num, list_shortfile))
                     elif len(optvals) > 1:
-                        print("   Warning reading {1}: multiple option values given in line {0}".format(line_num, list_shortfile))
+                        msg_print("   Warning reading {1}: multiple option values given in line {0}".format(line_num, list_shortfile))
 
     @staticmethod
     def UserSetMozFile():
@@ -824,8 +830,8 @@ class NamelistContainer:
         # available.
 
         if not os.path.isfile(NamelistContainer.cfg_fname):
-            print("wrfbuild.cfg does not exist. You need to run AUTOWRFCHEM CONFIG")
-            print("at least once to generate this file before you can set a MOZBC file.")
+            msg_print("wrfbuild.cfg does not exist. You need to run AUTOWRFCHEM CONFIG")
+            msg_print("at least once to generate this file before you can set a MOZBC file.")
             return None
 
         with open(NamelistContainer.cfg_fname, 'r') as cfgr:
@@ -840,19 +846,19 @@ class NamelistContainer:
 
         mozDataDir = os.path.join(NamelistContainer.my_dir,"..","..","MOZBC","data")
         if not os.path.exists(mozDataDir):
-            print("You have not created the 'data' link or folder in MOZBC!")
-            print("This must be created and contain your MOZBC files. Both")
-            print("this program and the MOZBC component of the automatic WRF")
-            print("program rely on this.")
+            msg_print("You have not created the 'data' link or folder in MOZBC!")
+            msg_print("This must be created and contain your MOZBC files. Both")
+            msg_print("this program and the MOZBC component of the automatic WRF")
+            msg_print("program rely on this.")
             raw_input("Press ENTER to continue")
             return None
 
         tmp = glob(os.path.join(mozDataDir, "*.nc"))
         mozFiles = [os.path.basename(f) for f in tmp]
         if len(mozFiles) < 1:
-            print("No MOZBC data files present! You need to download some.")
-            print("As of 20 Jul 2016, they can be obtained at")
-            print("http://www.acom.ucar.edu/wrf-chem/mozart.shtml")
+            msg_print("No MOZBC data files present! You need to download some.")
+            msg_print("As of 20 Jul 2016, they can be obtained at")
+            msg_print("http://www.acom.ucar.edu/wrf-chem/mozart.shtml")
             raw_input("Press ENTER to continue")
             return None
 
@@ -860,10 +866,10 @@ class NamelistContainer:
         if newMozFilename is None and mozFilename is not None:
             newMozFilename = mozFilename
         elif newMozFilename is None:
-            print("No MOZART file selected! You will need to select one before running")
-            print("the input preparation step. Rerunning 'autowrfchem config namelist'")
-            print("and modifying the current namelist will allow you to select a file")
-            print("later.")
+            msg_print("No MOZART file selected! You will need to select one before running")
+            msg_print("the input preparation step. Rerunning 'autowrfchem config namelist'")
+            msg_print("and modifying the current namelist will allow you to select a file")
+            msg_print("later.")
             raw_input("Press ENTER to continue")
             return None
         
@@ -885,7 +891,7 @@ class NamelistContainer:
 
         k = namelist.opts[sect].keys()
         if len(k) == 0:
-            print("{0} has no options".format(sect))
+            msg_print("{0} has no options".format(sect))
             return
 
         optslist = [o for o in k if o not in self.domain_opts and o not in self.date_opts]
@@ -894,7 +900,7 @@ class NamelistContainer:
             return
 
         if opt in self.met_opts:
-            print("Note: {0} is usually set by choosing a meteorology type, not directly".format(opt))
+            msg_print("Note: {0} is usually set by choosing a meteorology type, not directly".format(opt))
 
         if opt == "map_proj":
             self.UserSetMapProj()
@@ -912,12 +918,12 @@ class NamelistContainer:
         sect = UI.UserInputList("Which namelist section to display?", sectnames)
         if sect == "All":
             for s in namelist.opts.keys():
-                print("{0}:".format(s))
+                msg_print("{0}:".format(s))
                 for k,v in namelist.opts[s].iteritems():
-                    print("  {0} = {1}".format(k,v))
+                    msg_print("  {0} = {1}".format(k,v))
         elif sect is not None:
             for k,v in namelist.opts[sect].iteritems():
-                print("  {0} = {1}".format(k,v))
+                msg_print("  {0} = {1}".format(k,v))
 
     def UserNEICompatCheck(self):
         # This will go through the WPS options and make sure that they are compatible with the NEI gridding program
@@ -934,29 +940,29 @@ class NamelistContainer:
         missing_opts = False
         for opt in wps_expect_opt:
             if not self.wps_namelist.IsOptInNamelist(opt):
-                print("Option {0} not found in WPS namelist".format(opt))
+                msg_print("Option {0} not found in WPS namelist".format(opt))
                 missing_opts = True
         for opt in wrf_expect_opt:
             if not self.wrf_namelist.IsOptInNamelist(opt):
-                print("Option {0} not found in WRF namelist".format(opt))
+                msg_print("Option {0} not found in WRF namelist".format(opt))
                 missing_opts = True
 
         if missing_opts:
-            print("")
-            print("************************************************************************")
-            print("One or more expected options are missing from namelists")
-            print("This may be because an incompatible map projection was chosen")
-            print("Correct the map projection and try again.")
-            print("Note that polar projections have not been tested; if you are having")
-            print("issues with a polar projection, please open an issue at the GitHub repo:")
-            print(awc.repo)
-            print("************************************************************************")
+            msg_print("")
+            msg_print("************************************************************************")
+            msg_print("One or more expected options are missing from namelists")
+            msg_print("This may be because an incompatible map projection was chosen")
+            msg_print("Correct the map projection and try again.")
+            msg_print("Note that polar projections have not been tested; if you are having")
+            msg_print("issues with a polar projection, please open an issue at the GitHub repo:")
+            msg_print(awc.repo)
+            msg_print("************************************************************************")
             return
 
         stand_lon = float(self.wps_namelist.GetOptValNoSect("stand_lon",1))
         ref_lon = float(self.wps_namelist.GetOptValNoSect("ref_lon",1))
         if stand_lon != ref_lon:
-            print("NEI expects stand_lon ({0}) to be the same as ref_lon {1}".format(stand_lon, ref_lon))
+            msg_print("NEI expects stand_lon ({0}) to be the same as ref_lon {1}".format(stand_lon, ref_lon))
             if UI.UserInputYN("Make stand_lon the same as ref_lon? "):
                 self.wps_namelist.SetOptValNoSect("stand_lon", ref_lon)
 
@@ -964,8 +970,8 @@ class NamelistContainer:
         truelat1 = float(self.wps_namelist.GetOptValNoSect("truelat1", 1))
         truelat2 = float(self.wps_namelist.GetOptValNoSect("truelat2", 1))
         if truelat1 != ref_lat or truelat2 != ref_lat:
-            print("NEI gridding should be able to accept truelats different from ref_lat, but I have not tested it.")
-            print("(currently ref_lat = {0}, truelat1 = {1}, truelat2 = {2}".format(ref_lat, truelat1, truelat2))
+            msg_print("NEI gridding should be able to accept truelats different from ref_lat, but I have not tested it.")
+            msg_print("(currently ref_lat = {0}, truelat1 = {1}, truelat2 = {2}".format(ref_lat, truelat1, truelat2))
             if UI.UserInputYN("Make the truelats the same as ref_lat?"):
                 self.wps_namelist.SetOptValNoSect("truelat1", ref_lat)
                 self.wps_namelist.SetOptValNoSect("truelat2", ref_lat)
@@ -973,42 +979,42 @@ class NamelistContainer:
         dx = int(self.wps_namelist.GetOptValNoSect("dx", 1))
         dy = int(self.wps_namelist.GetOptValNoSect("dy", 1))
         if dx < 10000:
-            print("NEI regridding is very simple and may behave strangely for dx < 10000 m")
+            msg_print("NEI regridding is very simple and may behave strangely for dx < 10000 m")
             if UI.UserInputYN("Change it?"):
                 optval = UI.UserInputValue("dx", currval=dx)
                 if optval is not None:
                     self.wps_namelist.SetOptValNoSect("dx", optval)
                     self.wps_namelist.SetOptValNoSect("dy", optval)
                     if dx != dy:
-                        print("dy has been changed as well (dx == dy req. for NEI")
+                        msg_print("dy has been changed as well (dx == dy req. for NEI")
 
         dy = int(self.wps_namelist.GetOptValNoSect("dy", 1))
         if dx != dy:
-            print("NEI expects dx == dy ({0} != {1})".format(dx, dy))
+            msg_print("NEI expects dx == dy ({0} != {1})".format(dx, dy))
             if UI.UserInputYN("Make dy the same as dx?"):
                 self.wps_namelist.SetOptValNoSect("dy", dx)
 
         ioform5 = int(self.wrf_namelist.GetOptValNoSect("io_form_auxinput5",1))
         if ioform5 != 2 and ioform5 != 11:
-            print("io_form_auxinput5 should be 2 or 11 to use NEI, (currently {0})".format(ioform5))
+            msg_print("io_form_auxinput5 should be 2 or 11 to use NEI, (currently {0})".format(ioform5))
             if UI.UserInputYN("Set it to 2?"):
                 self.wrf_namelist.SetOptValNoSect("io_form_auxinput5",2)
 
         iostyleemis = int(self.wrf_namelist.GetOptValNoSect("io_style_emissions",1))
         if iostyleemis != 1:
-            print("NEI expects io_style_emissions = 1 (currently {0})".format(iostyleemis))
+            msg_print("NEI expects io_style_emissions = 1 (currently {0})".format(iostyleemis))
             if UI.UserInputYN("Set it to 1?"):
                 self.wrf_namelist.SetOptValNoSect("io_style_emissions", 1)
 
         emissinpt = int(self.wrf_namelist.GetOptValNoSect("emiss_inpt_opt",1))
         if emissinpt != 1:
-            print("NEI expects emiss_inpt_opt = 1 (currently {0})".format(iostyleemis))
+            msg_print("NEI expects emiss_inpt_opt = 1 (currently {0})".format(iostyleemis))
             if UI.UserInputYN("Set it to 1?"):
                 self.wrf_namelist.SetOptValNoSect("emiss_inpt_opt", 1)
 
         kemit = int(self.wrf_namelist.GetOptValNoSect("kemit", 1))
         if kemit != 19:
-            print("NEI has 19 emission levels. kemit is currently {0}".format(kemit))
+            msg_print("NEI has 19 emission levels. kemit is currently {0}".format(kemit))
             if UI.UserInputYN("Set kemit to 19?"):
                 self.wrf_namelist.SetOptValNoSect("kemit", 19)
 
@@ -1024,7 +1030,7 @@ class NamelistContainer:
             self.wrf_namelist.SetOptValNoSect(optname, optval)
         else:
             if optname in self.met_opts:
-                print("Warning: {0} is typically set by changing the meteorology type, rather than directly.".format(optname))
+                msg_print("Warning: {0} is typically set by changing the meteorology type, rather than directly.".format(optname))
             sect = self.wps_namelist.FindOptSection(optname)
             if sect is not None:
                 namelist = self.wps_namelist

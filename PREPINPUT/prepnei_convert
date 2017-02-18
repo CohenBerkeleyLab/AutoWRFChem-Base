@@ -65,6 +65,8 @@ if [ ! -f wrfchemi_00z_d01 ]; then
     exit 1
 fi
 
+cp -f rsl.error.0000 $mydir/../PREPLOGS/convert_00z.log
+
 # Now set up for the second 12 hr segment
 python $pyprog tempmod --start-date=12:00:00 --run-time=11h --bio_emiss_opt=0 $fdda_args
 
@@ -90,6 +92,8 @@ if [ ! -f wrfchemi_12z_d01 ]; then
     echo "mpirun if compiled in parallel) and check any output to identify the problem."
     exit 1
 fi
+
+cp -f rsl.error.0000 $mydir/../PREPLOGS/convert_12z.log
 
 # Restore the namelist to its user defined state, minus grid_fdda if it was on
 python $pyprog tempmod $fdda_args

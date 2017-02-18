@@ -26,9 +26,11 @@ def narr_end_of_range_date(curr_date, ndays):
         # month range returns two values; the second is the number of days
         # in the given month
         eor_date = dt.date(curr_date.year, curr_date.month, eom_day)
-    elif eom_day - eor_date.day <= 1:
+    elif eom_day - eor_date.day <= 1 and eor_date.month != 2:
         # At the the 3D NARR files have an extra day if it would otherwise be the
-        # day before the end of the month
+        # day before the end of the month, except in February. (The algorithm NARR
+        # seems to use to generate filenames/ranges is very obtuse. It seems like
+        # they must've hand-specified ranges.)
         eor_date = eor_date.replace(day=eom_day)
 
     return eor_date
@@ -73,6 +75,12 @@ def list_narr_files(narr_files, start_date, end_date, stem, ndays, extension="ta
     # Day of month must be a multiple of ndays plus 1
     while dom % ndays != 1:
         dom -= 1
+
+    if stem == "NARR3D_" and dom == 31:
+        # This kludge fixes a bug that occurs if the time period requested
+        # starts on the 31st - 31 to 31 fits the rules that work for everything
+        # else, but NARR3D files are produced for 28 to 31, not 28 to 30 and 31 to 31.
+        dom = 28
 
     curr_date = dt.date(start_date.year, start_date.month, dom)
     while curr_date <= end_date:
