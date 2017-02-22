@@ -12,7 +12,7 @@
 
 cd `dirname $0`
 mydir=`pwd -P`
-
+rootdir=$(cd ../..; pwd -P)
 pyprog="$mydir/../CONFIG/autowrf_namelist_main.py"
 chemopt=`python $pyprog get-wrf-opt --chem_opt`
 
@@ -24,6 +24,17 @@ fi
 . "$mydir/../wrfbuild.cfg" # this will get the variable mozbcFile
 if [ -z $mozbcFile ]; then
     echo "No mozbc file set in wrfbuild.cfg! Use autowrfchem config namelist to choose one."
+    exit 1
+fi
+
+wrfstart="$(python $pyprog get-wrf-opt --start-date)"
+wrfend="$(python $pyprog get-wrf-opt --end-date)"
+python "$mydir/mozcheck.py" "$rootdir/MOZBC/data/$mozbcFile" "$rootdir/WRFV3/run/wrfinput_d01" "$wrfend" "$wrfstart"
+moztst=$?
+if [ $moztst -ne 0 ]; then
+    echo ""
+    echo "prepmozbc: See above problems with MOZBC input file." 
+    echo "Choose a different file with autowrfchem config namelist."
     exit 1
 fi
 

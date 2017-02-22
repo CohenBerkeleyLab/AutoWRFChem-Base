@@ -28,9 +28,9 @@ def get_args():
 
     regex = "\d\d\d\d-\d\d-\d\d_\d\d:\d\d:\d\d"
     if not re.match(regex, inputs.startdate):
-        shell_error("startdate '{0}' is not in yyyy-mm-dd_HH:MM:SS format".format(inputs.startdate), file=sys.stderr)
+        shell_error("startdate '{0}' is not in yyyy-mm-dd_HH:MM:SS format".format(inputs.startdate))
     if not re.match(regex, inputs.enddate):
-        shell_error("enddate '{0}' is not in yyyy-mm-dd_HH:MM:SS format".format(inputs.enddate), file=sys.stderr)
+        shell_error("enddate '{0}' is not in yyyy-mm-dd_HH:MM:SS format".format(inputs.enddate))
 
     return inputs
 

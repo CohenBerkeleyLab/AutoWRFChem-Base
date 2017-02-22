@@ -31,6 +31,9 @@ if [ ! -d "$mydir/../PREPLOGS" ]; then
     mkdir "$mydir/../PREPLOGS"
 fi
 
+# Reset the namelist to default state
+python "$pyprog" tempmod
+
 # Verify that the settings needed for NEI and MEGAN are present in the current namelist
 badopts=false
 
@@ -195,15 +198,19 @@ if ! $metonly; then
     fi
 
     echo ""
-    python "$mydir/mozcheck.py" "$rootdir/MOZBC/data/$mozbcFile" "$rootdir/WRFV3/run/wrfinput_d01" "$wrfend" "$wrfstart"
-    moztst=$?
-    if [ $moztst -ne 0 ]; then
-        echo ""
-        echo "Fail: See above problems with MOZBC input file." 
-        echo "Choose a different file with autowrfchem config namelist."
-        badopts=true
+    if [ ! -f "$rootdir/WRFV3/run/wrfinput_d01" ]; then
+        echo "wrfinput_d01 not created yet. Holding off on checking MOZ file."
     else
-        echo "Pass: MOZBC meets safety check (10 deg buffer around domain, time period checked)"
+        python "$mydir/mozcheck.py" "$rootdir/MOZBC/data/$mozbcFile" "$rootdir/WRFV3/run/wrfinput_d01" "$wrfend" "$wrfstart"
+        moztst=$?
+        if [ $moztst -ne 0 ]; then
+            echo ""
+            echo "Fail: See above problems with MOZBC input file." 
+            echo "Choose a different file with autowrfchem config namelist."
+            badopts=true
+        else
+            echo "Pass: MOZBC meets safety check (10 deg buffer around domain, time period checked)"
+        fi
     fi
 fi
 

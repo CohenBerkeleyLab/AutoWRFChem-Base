@@ -30,7 +30,7 @@ fi
 run_sdate=$(python $pyprog get-wps-opt --no-quotes --start_date)
 run_edate=$(python $pyprog get-wps-opt --no-quotes --end_date)
 
-emi_sdate=$(python $pyemiyr 00z run_sdate run_edate)
+emi_sdate=$(python $pyemiyr 00z $run_sdate $run_edate)
 python $pyprog tempmod --start-date=${emi_sdate} --run-time=11h --bio_emiss_opt=0 $fdda_args
 # Now we go over to the run directory. Backup any existing wrfchemi files, then
 # run real.exe followed by convert_emiss.exe
@@ -78,8 +78,8 @@ fi
 cp -f rsl.error.0000 $mydir/../PREPLOGS/convert_00z.log
 
 # Now set up for the second 12 hr segment
-emi_sdate=$(python $pyemiyr 00z run_sdate run_edate)
-python $pyprog tempmod --start-date=${emi_edate} --run-time=11h --bio_emiss_opt=0 $fdda_args
+emi_sdate=$(python $pyemiyr 12z $run_sdate $run_edate)
+python $pyprog tempmod --start-date=${emi_sdate} --run-time=11h --bio_emiss_opt=0 $fdda_args
 
 ./real.exe
 realexit=$?

@@ -30,14 +30,14 @@ def get_args():
     date_re = '\d\d\d\d-\d\d-\d\d_\d\d:\d\d:\d\d'
 
     if not os.path.isfile(args.wrfin_file):
-        __shell_error('{0} does not exist'.format(args.wrfin_file))
+        shell_error('{0} does not exist'.format(args.wrfin_file))
     elif not re.match(wrfin_re, os.path.basename(args.wrfin_file)):
-        __shell_error('{0} does not appear to be a wrfinput file (base name did not match regular expression {1})'.format(wrfin_file, wrfin_re))
+        shell_error('{0} does not appear to be a wrfinput file (base name did not match regular expression {1})'.format(wrfin_file, wrfin_re))
 
     if not re.match(date_re, args.startdate):
-        __shell_error('Start date is not in yyyy-mm-dd_HH:MM:SS format')
+        shell_error('Start date is not in yyyy-mm-dd_HH:MM:SS format')
     if not re.match(date_re, args.enddate):
-        __shell_error('End date is not in yyyy-mm-dd_HH:MM:SS format')
+        shell_error('End date is not in yyyy-mm-dd_HH:MM:SS format')
 
     return args
 
