@@ -201,7 +201,7 @@ if ! $metonly; then
     if [ ! -f "$rootdir/WRFV3/run/wrfinput_d01" ]; then
         echo "wrfinput_d01 not created yet. Holding off on checking MOZ file."
     else
-        python "$mydir/mozcheck.py" "$rootdir/MOZBC/data/$mozbcFile" "$rootdir/WRFV3/run/wrfinput_d01" "$wrfend" "$wrfstart"
+        python "$mydir/mozcheck.py" "$rootdir/MOZBC/data/$mozbcFile" "$rootdir/WRFV3/run/wrfinput_d01" "$wrfstart" "$wrfend"
         moztst=$?
         if [ $moztst -ne 0 ]; then
             echo ""

@@ -63,6 +63,7 @@ fi
 
 ./convert_emiss.exe
 convexit=$?
+cp -f rsl.error.0000 $mydir/../PREPLOGS/convert_00z.log
 if [ $convexit -ne 0 ]; then
     echo "convert_emiss.exe failed with exit code $realexit when running the 00-12z period for NEI"
     echo "emissions. You should run it directly (with mpirun if compiled in parallel) and check any"
@@ -75,7 +76,6 @@ if [ ! -f wrfchemi_00z_d01 ]; then
     exit 1
 fi
 
-cp -f rsl.error.0000 $mydir/../PREPLOGS/convert_00z.log
 
 # Now set up for the second 12 hr segment
 emi_sdate=$(python $pyemiyr 12z $run_sdate $run_edate)
@@ -92,6 +92,7 @@ fi
 
 ./convert_emiss.exe
 convexit=$?
+cp -f rsl.error.0000 $mydir/../PREPLOGS/convert_12z.log
 if [ $convexit -ne 0 ]; then
     echo "convert_emiss.exe failed with exit code $realexit when running the 12-24z period for NEI"
     echo "emissions. You should run it directly (with mpirun if compiled in parallel) and check any"
@@ -104,7 +105,6 @@ if [ ! -f wrfchemi_12z_d01 ]; then
     exit 1
 fi
 
-cp -f rsl.error.0000 $mydir/../PREPLOGS/convert_12z.log
 
 # Restore the namelist to its user defined state, minus grid_fdda if it was on
 python $pyprog tempmod $fdda_args
