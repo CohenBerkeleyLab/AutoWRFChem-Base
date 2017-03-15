@@ -40,6 +40,10 @@ if ! $override; then
         echo "WRF_CHEM must be set to 1 to compile WRF-Chem"
         doexit=true
     fi
+    if [ -z "$WRFIO_NCD_LARGE_FILE_SUPPORT" ] || [ "$WRFIO_NCD_LARGE_FILE_SUPPORT" -ne 1 ]; then
+        echo "WRFIO_NCD_LARGE_FILE_SUPPORT should be set to 1 for WRF-Chem"
+        doexit=true
+    fi
 
     if $doexit; then
         echo ""
@@ -57,6 +61,7 @@ if ! $override; then
         echo "export NMM_CORE=$NMM_CORE" >> $outfile
         echo "export WRF_NMM_CORE=$WRF_NMM_CORE" >> $outfile
         echo "export WRF_CHEM=$WRF_CHEM" >> $outfile
+        echo "export WRFIO_NCD_LARGE_FILE_SUPPORT=1" >> $outfile
     fi
 else
     echo "export EM_CORE=1" >> $outfile
@@ -64,6 +69,7 @@ else
     echo "export NMM_CORE=0" >> $outfile
     echo "export WRF_NMM_CORE=0" >> $outfile
     echo "export WRF_CHEM=1" >> $outfile
+    echo "export WRFIO_NCD_LARGE_FILE_SUPPORT=1" >> $outfile
 fi
 
 if [ ! -z "$WRF_KPP" ]; then

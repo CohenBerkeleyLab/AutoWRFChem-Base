@@ -84,32 +84,6 @@ if ! $metonly; then
     fi
 fi
 
-syr=`python $pyprog get-wrf-opt --start_year`
-syr=`printf %04d $syr`
-smn=`python $pyprog get-wrf-opt --start_month`
-smn=`printf %02d $smn`
-sdy=`python $pyprog get-wrf-opt --start_day`
-sdy=`printf %02d $sdy`
-eyr=`python $pyprog get-wrf-opt --end_year`
-syr=`printf %04d $eyr`
-emn=`python $pyprog get-wrf-opt --end_month`
-emn=`printf %02d $emn`
-edy=`python $pyprog get-wrf-opt --end_day`
-edy=`printf %02d $edy`
-
-metname="met_em.d01.${syr}-${smn}-${sdy}"
-ls ${metname}* >/dev/null 2>&1
-if [ $? -ne 0 ]; then
-    echo "Missing met files for the first day of the run (pattern is $metname)"
-    missingfile=true
-fi
-
-metname="met_em.d01.${eyr}-${emn}-${edy}"
-ls ${metname}* >/dev/null 2>&1
-if [ $? -ne 0 ]; then
-    echo "Missing met files for the last day of the run (pattern is $metname)"
-    missingfile=true
-fi
 
 if $missingfile; then
     echo "One or more missing files, aborting run."
