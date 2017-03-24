@@ -54,6 +54,8 @@ gc_hyb_mid = 0.5*(gc_hyb[:-1] + gc_hyb[1:])
 
 gc_base_date = dt.datetime(1985, 1, 1)
 
+gc_categories = ['IJ-AVG-$_', 'TIME-SER_']
+moz_suffix = '_VMR_inst'
 
 def shell_error(msg, exitcode=1):
     print(msg, file=sys.stderr)
@@ -92,6 +94,13 @@ def flip_dim(M, dim):
     return M
 
 
+def geos_to_moz_name(name):
+    for cat in gc_categories:
+        name = name.replace(cat, '')
+    name += moz_suffix
+    return name
+
+
 def mozdate(date_in):
     # MOZART defines time two different ways:
     #  1) With the date as a 8-digit integer (yyyymmdd) and then number of seconds since midnight
@@ -120,45 +129,6 @@ def mozdate_array(dates_in):
 
     return np.array(date_ints), np.array(date_secs), np.array(days_since), np.array(since_secs)
 
-
-class Mapping(object):
-    gc_category = 'IJ-AVG-$_'
-    moz_suffix = '_VMR_inst'
-
-    def __init__(self, moz_spc, *gc_spcs):
-        self.moz = moz_spc
-
-        # Parse the variable argument, which should be each GEOS-Chem species, possibly preceeded by a multiplicative
-        # factor, e.g. in ALD, 0.5, ALK4 the 0.5 is associated with ALK4 and means that whatever the mozart species
-        # is will be equal to ALD + 0.5*ALK
-        self.gc = {}
-        this_factor = 1.0
-        for arg in gc_spcs:
-            if isinstance(arg, float):
-                this_factor *= arg  # allow for multiple factors to be given for a single species
-            elif isinstance(arg, str):
-                self.gc[arg] = this_factor
-                this_factor = 1.0
-            else:
-                raise TypeError('Position arguments gc_spcs must be either floats or strings')
-
-    def return_mapping(self, gcfile):
-        if not isinstance(gcfile, bpch):
-            raise TypeError('gcfile must be an instance of bpch.bpch')
-
-        first_var = True
-        for var, factor in self.gc.iteritems():
-            gc_fullname = self.gc_category + var
-            if first_var:
-                moz_val = gcfile.variables[gc_fullname] * factor
-                first_var = False
-            else:
-                moz_val += gcfile.variables[gc_fullname] * factor
-
-        return moz_val
-
-    def moz_fullname(self):
-        return self.moz + self.moz_suffix
 
 
 class FilesAndTimes(object):
@@ -223,58 +193,7 @@ def get_args():
     return argout
 
 
-def parse_species_map(species_file):
-    mappings = []
-    in_mapping = False
-    with open(species_file, 'r') as spcf:
-        file_line = 0
-        for line in spcf:
-            file_line += 1
-
-            if not in_mapping:
-                if 'BEGIN MAPPING' in line:
-                    in_mapping = True
-            else:
-                if 'END MAPPING' in line:
-                    in_mapping = False
-                else:
-                    if '->' not in line:
-                        format_error(file_line, species_file, 'does not contain "->"')
-
-                    moz_spc, gc_spc = line.split('->')
-                    moz_spc = moz_spc.strip()
-                    gc_spc = gc_spc.strip()
-
-                    if re.search('\W', moz_spc):
-                        format_error(file_line, species_file,
-                                     'mozart species name must only include alphanumeric characters\n'
-                                     'and there must only be one mozart species per line')
-
-                    gc_str_list = [x.strip() for x in gc_spc.split('+')]
-                    gc_list = []
-
-                    for gc_el in gc_str_list:
-                        gc_spc = [x.strip() for x in gc_el.split('*')]
-                        gc_spc_name = gc_spc.pop(
-                            -1)  # assume that the name is the last element, as it should be factor * name
-                        gc_factor = 1.0
-                        for fac in gc_spc:
-                            try:
-                                fac_float = float(fac)
-                            except ValueError:
-                                format_error(file_line, species_file,
-                                             'could not convert {0} to a float'.format(fac_float))
-                            gc_factor *= fac_float
-
-                        gc_list.append(gc_factor)
-                        gc_list.append(gc_spc_name)
-
-                    mappings.append(Mapping(moz_spc, *gc_list))
-
-    return mappings
-
-
-def write_netcdf(outfile, map_file, bpchfiles, overwrite=True):
+def write_netcdf(outfile, bpchfiles, overwrite=True):
     ncfile = ncdf.Dataset(outfile, 'w', clobber=overwrite, format='NETCDF3_CLASSIC')
 
     if __debug_level__ > 0:
@@ -286,12 +205,8 @@ def write_netcdf(outfile, map_file, bpchfiles, overwrite=True):
     define_dimensions(ncfile, file_times)
 
     if __debug_level__ > 0:
-        shell_msg('Reading species mapping')
-    mappings = parse_species_map(map_file)
-
-    if __debug_level__ > 0:
         shell_msg('Writing chemical species')
-    write_mappings(ncfile, mappings, file_times)
+    write_chem_species(ncfile, file_times)
 
     if __debug_level__ > 0:
         shell_msg('Adding CH4 from latitudinal bins')
@@ -433,14 +348,25 @@ def define_dimensions(ncfile, filetimes):
     ncfile.variables['PS'].units = 'Pa'
 
 
-def write_mappings(ncfile, mappings, filetimes):
+def write_chem_species(ncfile, filetimes):
     nlev = ncfile.dimensions['lev'].size
 
-    for m in mappings:
+    # Find all GEOS variables in the categories defined as static variables
+    b = bpch(filetimes.unique_files()[0])
+    gc_moz_names = {} # this will be a dictionary with the GC name as the key and the MOZART-like name as the value
+    for k in b.variables.keys():
+        for cat in gc_categories:
+            if cat in k:
+                gc_moz_names[k] = geos_to_moz_name(k)
+    b.close()
+
+    for gc_name, moz_name in gc_moz_names.iteritems():
+        if __debug_level__ > 1:
+            shell_msg('  Writing {0} as {1}'.format(gc_name, moz_name))
         val = []
         for fname in filetimes.unique_files():
             b = bpch(fname)
-            this_val = m.return_mapping(b)
+            this_val = b.variables[gc_name]
             sz = list(this_val.shape)
             n_to_add = nlev - sz[1]
             if n_to_add > 0:
@@ -451,9 +377,9 @@ def write_mappings(ncfile, mappings, filetimes):
             val.append(flip_dim(this_val, 1))  # remember, GEOS-Chem defines z=1 as surface; MOZART says that's TOA
             b.close()
 
-        ncfile.createVariable(m.moz_fullname(), np.float32, dimensions=('time','lev','lat','lon'))
-        ncfile.variables[m.moz_fullname()][:] = np.concatenate(val, 0)
-        ncfile.variables[m.moz_fullname()].units = 'VMR'
+        ncfile.createVariable(moz_name, np.float32, dimensions=('time','lev','lat','lon'))
+        ncfile.variables[moz_name][:] = np.concatenate(val, 0)
+        ncfile.variables[moz_name].units = 'VMR'
 
 
 def add_methane(ncfile):
