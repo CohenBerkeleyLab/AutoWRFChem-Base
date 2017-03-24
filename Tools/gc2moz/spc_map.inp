@@ -1,0 +1,7 @@
+BEGIN MAPPING
+ANs -> MPN + ISOPN
+no -> NO
+no2 -> NO2
+nox -> NO + NO2
+tox -> 2*CO + 3*2*NO + NO2
+END MAPPING

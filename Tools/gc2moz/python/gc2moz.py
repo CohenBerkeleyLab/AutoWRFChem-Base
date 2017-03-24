@@ -9,7 +9,11 @@ import re
 import sys
 import pdb
 
+# Local modules
+import gcCH4bins
+
 __author__ = 'Josh Laughner'
+__debug_level__ = 2
 
 ######################################
 ##### GEOS-Chem Static variables #####
@@ -203,43 +207,19 @@ class FilesAndTimes(object):
 
 
 def get_args():
-    parser = argparse.ArgumentParser(description='Convert a GEOS-Chem output file to a netCDF file that MOZBC can use',
-                                     formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('-s', '--start-date', help='starting date in yyyy-mm-dd format')
-    parser.add_argument('-e', '--end-date', help='ending date in yyyy-mm-dd format')
-    parser.add_argument('-t', '--time-step', default='3:00', help='time step between data points. Default is 3:00.\n'
-                                                                  'Values should be given as HH:MM format')
-    parser.add_argument('-d', '--domain', default='-180,180,-90,90',
-                        help='the domain limits as west,east,south,north - defaults to global.\n'
-                             'Give west longitudes as negative')
-    parser.add_argument('-o', '--output-file', help='the name (and path if desired) of the output file')
+    parser = argparse.ArgumentParser(description='Convert a GEOS-Chem ND49 binary punch file to a netCDF file that MOZBC can use',
+                                     formatter_class=argparse.RawTextHelpFormatter,
+                                     epilog='This method is intended to read ND49 diagnostic files because generally\n'
+                                            'one needs output multiple times per day, rather than one daily average,\n'
+                                            'to set initial and boundary conditions for WRF with any sort of accuracy.\n'
+                                            'Those ND49 files must contain whatever tracers are referenced in the\n'
+                                            'species input file, plus the PEDGE-$_PSURF diagnostic.')
+    parser.add_argument('-o', '--output-file', default='geosBC.nc', help='the name (and path if desired) of the output file')
     parser.add_argument('bpchfiles', nargs='+', help='All the ND49 bpch files to draw data from')
 
     args = parser.parse_args()
-    date_re = '\d\d\d\d-\d\d-\d\d'
-    if not isinstance(args.start_date, str) or not re.match(date_re, args.start_date):
-        shell_error('--start-date (-s) is required and value must be in yyyy-mm-dd format')
-    if not isinstance(args.end_date, str) or not re.match(date_re, args.end_date):
-        shell_error('--end-date (-e) is required and value must be in yyyy-mm-dd format')
 
-    try:
-        domain = [float(x) for x in args.domain.split(',')]
-    except ValueError as err:
-        shell_error('--domain (-d) value must be four numbers separated by commas')
-
-    if len(domain) != 4:
-        shell_error('--domain (-d) value must be four numbers separated by commas')
-
-    if args.output_file is None:
-        west = '{0}W'.format(abs(int(domain[0]))) if domain[0] < 0 else '{0}E'.format(int(domain[0]))
-        east = '{0}W'.format(abs(int(domain[1]))) if domain[1] < 0 else '{0}E'.format(int(domain[1]))
-        south = '{0}S'.format(abs(int(domain[2]))) if domain[2] < 0 else '{0}N'.format(int(domain[2]))
-        north = '{0}S'.format(abs(int(domain[3]))) if domain[3] < 0 else '{0}N'.format(int(domain[3]))
-        output_file = 'geosBC_{0}to{1}_{2}to{3}_{4}to{5}.nc'.format(args.start_date, args.end_date, west, east, south,
-                                                                    north)
-
-    argout = {'startdate': args.start_date, 'enddate': args.end_date, 'timestep': args.time_step,
-              'domain': domain, 'bpchfiles': args.bpchfiles, 'outfile': output_file}
+    argout = {'bpchfiles': args.bpchfiles, 'outfile': output_file}
     return argout
 
 
@@ -297,11 +277,25 @@ def parse_species_map(species_file):
 def write_netcdf(outfile, map_file, bpchfiles, overwrite=True):
     ncfile = ncdf.Dataset(outfile, 'w', clobber=overwrite, format='NETCDF3_CLASSIC')
 
+    if __debug_level__ > 0:
+        shell_msg('Reading times from BPCH files')
     file_times = FilesAndTimes(bpchfiles)
+
+    if __debug_level__ > 0:
+        shell_msg('Writing dimensions')
     define_dimensions(ncfile, file_times)
 
+    if __debug_level__ > 0:
+        shell_msg('Reading species mapping')
     mappings = parse_species_map(map_file)
+
+    if __debug_level__ > 0:
+        shell_msg('Writing chemical species')
     write_mappings(ncfile, mappings, file_times)
+
+    if __debug_level__ > 0:
+        shell_msg('Adding CH4 from latitudinal bins')
+    add_methane(ncfile)
 
     ncfile.close()
 
@@ -454,12 +448,52 @@ def write_mappings(ncfile, mappings, filetimes):
                 padding = np.empty(sz)
                 padding.fill(fill_val)
                 this_val = np.concatenate([this_val, padding], 1)
-            val.append(this_val)
+            val.append(flip_dim(this_val, 1))  # remember, GEOS-Chem defines z=1 as surface; MOZART says that's TOA
             b.close()
 
         ncfile.createVariable(m.moz_fullname(), np.float32, dimensions=('time','lev','lat','lon'))
         ncfile.variables[m.moz_fullname()][:] = np.concatenate(val, 0)
         ncfile.variables[m.moz_fullname()].units = 'VMR'
+
+
+def add_methane(ncfile):
+    # Add methane based on the GEOS-Chem methane bins.
+    # For each time, add the year-specific concentrations. This will cause a slight discontinuity at the end of each
+    # year, but the percent change is small and I believe this is how GEOS-Chem does it (though that's based off of a
+    # very quick examination of the code). Also, this really should decrease once you get into the stratosphere, but
+    # generally WRF-Chem does not simulate the stratosphere (at least as I've used it) and I think GEOS-Chem sets the
+    # CH4 concentration to be the same in all levels.
+
+    years = ncfile.variables['date'][:]/10000
+    lat = ncfile.variables['lat'][:]
+
+    # Find a chemistry variable to get the shape of
+    for k in ncfile.variables.keys():
+        if Mapping.moz_suffix in k:
+            chem_key = k
+            break
+
+    ch4 = np.zeros_like(ncfile.variables[chem_key][:])
+
+    for i in range(len(years)):
+        ch4_bins = gcCH4bins.get_global_ch4(years[i])
+
+        xx = (lat >= gcCH4bins.north_lats[0])
+        ch4[i, :, xx, :] = ch4_bins['north']
+
+        xx = (lat >= gcCH4bins.north_trop_lats[0]) & (lat < gcCH4bins.north_trop_lats[1])
+        ch4[i, :, xx, :] = ch4_bins['north_trop']
+
+        xx = (lat >= gcCH4bins.south_trop_lats[0]) & (lat < gcCH4bins.south_trop_lats[1])
+        ch4[i, :, xx, :] = ch4_bins['south_trop']
+
+        xx =  (lat < gcCH4bins.south_lats[1])
+        ch4[i, :, xx, :] = ch4_bins['south']
+
+    ch4_varname = 'CH4' + Mapping.moz_suffix
+    ncfile.createVariable(ch4_varname, np.float32, dimensions=('time','lev','lat','lon'))
+    ncfile.variables[ch4_varname][:] = ch4
+    ncfile.variables[ch4_varname].units = 'VMR'
 
 
 def main():
