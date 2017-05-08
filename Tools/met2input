@@ -18,9 +18,18 @@ for f in $mets; do
     if [[ $f =~ $regex ]]; then
         mdate="${BASH_REMATCH[0]}"
         echo "Met date = $mdate"
-        python $pyprog tempmod --start-date="$mdate" --run-time=0h
+        python $pyprog tempmod --start-date="$mdate" --run-time=0h --io_style_emissions=0 --emiss_inpt_opt=0 --bio_emiss_opt=0
         echo "Generating wrfinput for $mdate"
         ./real.exe
+        if [[ $? -ne 0 ]]; then
+            echo "real.exe failed when working on $mdate" >&2
+            echo "Check rsl.error.0000 if no other error message printed above" >&2
+            exit 1
+        fi
         mv wrfinput_d01 "wrfinput_d01_$mdate"
     fi
 done
+
+echo "Restoring namelist to original state"
+python $pyprog tempmod
+exit 0
