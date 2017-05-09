@@ -54,7 +54,13 @@ gc_hyb_mid = 0.5*(gc_hyb[:-1] + gc_hyb[1:])
 
 gc_base_date = dt.datetime(1985, 1, 1)
 
+# Possible diagnostic categories that GC tracers could be in. Any GEOS-Chem tracer in one of these categories and not
+# listed in gc_ignore_vars will be written to the pseudo-MOZART file. This category will be removed from the variable
+# name when saving to the MOZART-like file.
 gc_categories = ['IJ-AVG-$_', 'TIME-SER_']
+gc_ignore_vars = ['TIME-SER_AIRDEN']
+
+# The suffix to append to each variable from the GEOS-Chem categories given above before saving to the MOZART-like file
 moz_suffix = '_VMR_inst'
 
 def shell_error(msg, exitcode=1):
@@ -73,9 +79,6 @@ def format_error(lineno, spcfile, msg):
 def bpch_error(bpch_filename, varname, req_for):
     if isinstance(req_for, str):
         shell_error('Variable {0} not found in {1} (requested by {2})'.format(varname, bpch_filename, req_for))
-    elif isinstance(req_for, Mapping):
-        err_str = ''
-        shell_error('Variable {0} not found in {1} (requested by {2})'.format(varname, bpch_filename, err_str))
 
 
 def flip_dim(M, dim):
@@ -128,6 +131,47 @@ def mozdate_array(dates_in):
         since_secs.append(ssince)
 
     return np.array(date_ints), np.array(date_secs), np.array(days_since), np.array(since_secs)
+
+
+def unit_conversion(current_values, unit_type, current_unit, new_unit):
+    """
+    Converts given values between the specified units
+    :param current_values: the current values that you want converted between units. It can be any type, so long as
+    arithmetic operations with scalars behave appropriately. A numpy array will work; a list will not.
+    :param unit_type: the type of unit (e.g. mixing ratio, length, mass) as a string
+    :param current_unit: a string representing the current unit
+    :param new_unit: a string representing the desired unit
+    :return: the same type as current_values converted to be the new units
+    """
+
+    if not isinstance(unit_type, str):
+        raise TypeError('unit_type must be a string')
+    if not isinstance(current_unit, str):
+        raise TypeError('current_unit must be a string')
+    if not isinstance(new_unit, str):
+        raise TypeError('new_unit must be a string')
+    try:
+        current_values + 1.0
+        current_values - 1.0
+        current_values * 1.0
+        current_values / 1.0
+    except:
+        raise TypeError('Cannot perform one or more arithmetic operations on current_values')
+
+    # Define the conversions here. conv_factors must be a dictionary where the keys are the units and the values are
+    # the factor that multiplying the a base unit by converts it to the unit in question.
+    if unit_type.lower() == 'mixing ratio' or unit_type.lower() == 'vmr':
+        base_unit = 'ppp'
+        conv_factors = {'ppp': 1.0, 'ppm': 1.0e6, 'ppmv': 1.0e6, 'ppb': 1.0e9, 'ppbv': 1.0e9, 'ppbC': 1.0e9}
+    else:
+        raise ValueError('Unit type "{0}" not recognized'.format(unit_type))
+
+    if current_unit not in conv_factors.keys():
+        raise KeyError('{0} unit "{1}" not defined'.format(unit_type, current_unit))
+    if new_unit not in conv_factors.keys():
+        raise KeyError('{0} unit "{1}" not defined'.format(unit_type, new_unit))
+
+    return current_values * conv_factors[new_unit] / conv_factors[current_unit]
 
 
 
@@ -189,7 +233,7 @@ def get_args():
 
     args = parser.parse_args()
 
-    argout = {'bpchfiles': args.bpchfiles, 'outfile': output_file}
+    argout = {'bpchfiles': args.bpchfiles, 'outfile': args.output_file}
     return argout
 
 
@@ -232,6 +276,7 @@ def define_dimensions(ncfile, filetimes):
     bfile = bpch(filetimes.files[0])
 
     lon = bfile.variables['longitude']
+    lon[lon<0] += 360 # MOZART gives longitude W as positive numbers where -179 -> 181 and -1 -> 359
     lat = bfile.variables['latitude']
     psurf = bfile.variables['PEDGE-$_PSURF']
 
@@ -367,6 +412,18 @@ def write_chem_species(ncfile, filetimes):
         for fname in filetimes.unique_files():
             b = bpch(fname)
             this_val = b.variables[gc_name]
+            this_unit = b.variables[gc_name].units
+            if this_unit == 'molec/cm3':
+                if __debug_level__ > 1:
+                    shell_msg('Converting molec/cm3 to VMR')
+
+                airden = b.variables['TIME-SER_AIRDEN']
+                this_val /= airden
+            else:
+                if __debug_level__ > 1:
+                    scale = unit_conversion(1.0, 'vmr', this_unit, 'ppp')
+                    shell_msg('  Scaling by {0}'.format(scale))
+                this_val = unit_conversion(this_val, 'vmr', this_unit, 'ppp')
             sz = list(this_val.shape)
             n_to_add = nlev - sz[1]
             if n_to_add > 0:
@@ -395,7 +452,7 @@ def add_methane(ncfile):
 
     # Find a chemistry variable to get the shape of
     for k in ncfile.variables.keys():
-        if Mapping.moz_suffix in k:
+        if moz_suffix in k:
             chem_key = k
             break
 
@@ -416,7 +473,7 @@ def add_methane(ncfile):
         xx =  (lat < gcCH4bins.south_lats[1])
         ch4[i, :, xx, :] = ch4_bins['south']
 
-    ch4_varname = 'CH4' + Mapping.moz_suffix
+    ch4_varname = 'CH4' + moz_suffix
     ncfile.createVariable(ch4_varname, np.float32, dimensions=('time','lev','lat','lon'))
     ncfile.variables[ch4_varname][:] = ch4
     ncfile.variables[ch4_varname].units = 'VMR'
@@ -424,7 +481,7 @@ def add_methane(ncfile):
 
 def main():
     args = get_args()
-    print(args['outfile'])
+    write_netcdf(args['outfile'], args['bpchfiles'])
 
 
 if __name__ == '__main__':
