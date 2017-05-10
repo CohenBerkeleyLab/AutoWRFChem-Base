@@ -39,8 +39,12 @@ if [ $moztst -ne 0 ]; then
 fi
 
 # Find out if the file is a GEOS-chem derived file. This ungodly long command prints the global attributes
-# for the file, finds the one called 'title', and cuts the string down to its value.
-mozfiletitle=$(ncks -M "$mozbcFile" | grep 'title' | cut -f 3 -d '=' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+# for the file, finds the one called 'title', and cuts the string down to its value, trimming spaces at the
+# beginning and end. The grep specifically looks for "title" after "Global attribute n:" where n is a 1-4 
+# digit number to ensure that we are getting the title attribute and not some other attribute line that happens
+# to include the string "title"
+echo "$mozbcFile"
+mozfiletitle=$(ncks -M "$rootdir/MOZBC/data/$mozbcFile" | grep -E 'Global attribute [[:digit:]]{1,4}: title' | cut -f 3 -d '=' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
 
 listfile="mozbc-chemopt-list.txt"
 while read -r line; do
@@ -84,8 +88,9 @@ if [[ $mozfiletitle == "GEOS-Chem" ]]; then
     IFS=$oldifs
     mozfile="${fstem}-GC.${fext}"
     echo "netCDF file $mozbcFile looks to be derived from GEOS-Chem with gc2moz.py"
-    echo "Using $mozfile as the input"
 fi
+
+echo "Using $mozfile as the input"
 
 # Double check that the input file exists BEFORE we run real (why waste time if
 # it's not going to work?)

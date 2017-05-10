@@ -77,27 +77,29 @@ def get_moz_info(mozfile):
     return (lon.min(), lon.max()), (lat.min(), lat.max()), (moz_st_dt, moz_end_dt)
 
 def moz_validation(mozfile, wrfin, wrf_startdate, wrf_enddate):
+    latlon_buffer = 10
+
     wrf_lonlim, wrf_latlim, wrf_timelim = get_run_info(wrfin, wrf_startdate, wrf_enddate)
     moz_lonlim, moz_latlim, moz_timelim = get_moz_info(mozfile)
 
     exitcode = 0
     
-    geo_msg = 'Warning: {0} MOZ border does not have a 10 degree buffer from the nearest WRF border\n\t{1}'
-    if moz_lonlim[0] - wrf_lonlim[0] > -10:
+    geo_msg = 'Warning: {0} MOZ border does not have a {1} degree buffer from the nearest WRF border\n\t{2}'
+    if moz_lonlim[0] - wrf_lonlim[0] > -latlon_buffer:
         line2 = '(MOZ min lon = {0}, WRF min lon = {1})'.format(moz_lonlim[0], wrf_lonlim[0])
-        shell_warning(geo_msg.format('West', line2))
+        shell_warning(geo_msg.format('West', latlon_buffer, line2))
         exitcode = 1
-    if moz_lonlim[1] - wrf_lonlim[1] < 10:
+    if moz_lonlim[1] - wrf_lonlim[1] < latlon_buffer:
         line2 = '(MOZ max lon = {0}, WRF max lon = {1})'.format(moz_lonlim[1], wrf_lonlim[1])
-        shell_warning(geo_msg.format('East', line2))
+        shell_warning(geo_msg.format('East', latlon_buffer, line2))
         exitcode = 1
-    if moz_latlim[0] - wrf_latlim[0] > -10:
+    if moz_latlim[0] - wrf_latlim[0] > -latlon_buffer:
         line2 = '(MOZ min lat = {0}, WRF min lat = {1})'.format(moz_latlim[0], wrf_latlim[0])
-        shell_warning(geo_msg.format('South', line2))
+        shell_warning(geo_msg.format('South', latlon_buffer, line2))
         exitcode = 1
-    if moz_latlim[1] - wrf_latlim[1] < 10:
+    if moz_latlim[1] - wrf_latlim[1] < latlon_buffer:
         line2 = '(MOZ max lat = {0}, WRF max lat = {1})'.format(moz_latlim[1], wrf_latlim[1])
-        shell_warning(geo_msg.format('North', line2))
+        shell_warning(geo_msg.format('North', latlon_buffer, line2))
         exitcode = 1
     if moz_timelim[0] > wrf_timelim[0]:
         line2 = '(MOZ first time = {0}, WRF first time = {1})'.format(moz_timelim[0], wrf_timelim[0])
