@@ -239,6 +239,7 @@ def get_args():
 
 def write_netcdf(outfile, bpchfiles, overwrite=True):
     ncfile = ncdf.Dataset(outfile, 'w', clobber=overwrite, format='NETCDF3_CLASSIC')
+    ncfile.title = 'GEOS-Chem'
 
     if __debug_level__ > 0:
         shell_msg('Reading times from BPCH files')

@@ -38,6 +38,10 @@ if [ $moztst -ne 0 ]; then
     exit 1
 fi
 
+# Find out if the file is a GEOS-chem derived file. This ungodly long command prints the global attributes
+# for the file, finds the one called 'title', and cuts the string down to its value.
+mozfiletitle=$(ncks -M "$mozbcFile" | grep 'title' | cut -f 3 -d '=' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
 listfile="mozbc-chemopt-list.txt"
 while read -r line; do
     if [ -z "$line" ]; then
@@ -69,6 +73,18 @@ elif [ "$mozfile" == "NONE" ]; then
     echo "No MOZART --> WRF-Chem mapping available for chem_opt=$chemopt"
     echo "Skipping MOZBC."
     exit 0
+fi
+
+# If the netCDF file is a GEOS-Chem derived file, append -GC to the input file
+# name. Perhaps this should instead allow the user to pick the file out of a 
+# comma separated list in the list file?
+if [[ $mozfiletitle == "GEOS-Chem" ]]; then
+    oldifs=$IFS # storing this to reset may be unecessary, but seems safer
+    IFS='.', read fstem fext <<< "$mozfile"
+    IFS=$oldifs
+    mozfile="${fstem}-GC.${fext}"
+    echo "netCDF file $mozbcFile looks to be derived from GEOS-Chem with gc2moz.py"
+    echo "Using $mozfile as the input"
 fi
 
 # Double check that the input file exists BEFORE we run real (why waste time if
