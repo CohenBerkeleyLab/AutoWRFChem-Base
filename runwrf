@@ -16,9 +16,11 @@ pydate="$mydir/Tools/datecompare.py"
 # See if this was called with the "override" flag
 override=false
 usempi=true
+useenvcmd=false
 metonly=false
 rst=false
 errnorst=true
+dryrun=false
 while [ $# -gt 0 ]; do
     case $1 in
         override|--override)
@@ -30,6 +32,11 @@ while [ $# -gt 0 ]; do
         --ntasks*)
             i=`expr index "$1" "="`
             ntasks=${1:i}
+            usempi=true
+            ;;
+        --alt-mpi-cmd)
+            useenvcmd=true
+            usempi=true
             ;;
         --nompi)
             usempi=false
@@ -44,14 +51,19 @@ while [ $# -gt 0 ]; do
             i=`expr index $1 "="`
             runfor=${1:i}
             ;;
+        --dry-run)
+            dryrun=true
+            ;;
     esac
     shift
 done
 
+
 # INPUT CHECKING 
-if $usempi; then
+if $usempi && ! $useenvcmd; then
     if [ -z "$ntasks" ]; then
         echo "Must pass a number of tasks to start with --ntasks= if running WRF in parallel"
+        echo "or use the --mpicmd= option to specify an alternate command to execute WRF."
         echo "(give option --nompi to run using syntax ./wrf.exe)"
         exit 1
     fi
@@ -133,14 +145,25 @@ elif [[ ! -z $runfor ]]; then
     python $pyprog tempmod $runtimearg
 fi
 
-# Actually run WRF!
-if $usempi; then
-    errorfile="rsl.error.0000"
-    mpirun -np $ntasks wrf.exe
-    wrfexit=$?
+# Format the run command
+if $useenvcmd; then
+    if [[ -z $AWC_MPICMD ]]; then
+        echo "Error trying to use --alt-mpi-cmd: Environmental variable AWC_MPICMD not set"
+        exit 1
+    fi
+    runcmd="$AWC_MPICMD"
+elif $usempi; then
+    runcmd="mpirun -np $ntasks wrf.exe"
 else
-    errorfile="runwrf.log"
-    ./wrf.exe >& runwrf.log
+    runcmd="./wrf.exe >& runwrf.log"
+fi
+
+# Actually run WRF!
+if $dryrun; then
+    echo "$runcmd"
+    wrfexit=0
+else
+    $runcmd
     wrfexit=$?
 fi
 
