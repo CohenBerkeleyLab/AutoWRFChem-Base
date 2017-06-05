@@ -160,7 +160,7 @@ fi
 
 # Actually run WRF!
 if $dryrun; then
-    echo "$runcmd"
+    echo "$runcmd in $(pwd)"
     wrfexit=0
 else
     $runcmd
