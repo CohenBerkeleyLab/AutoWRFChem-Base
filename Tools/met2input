@@ -5,6 +5,13 @@ cd `dirname $0`
 mydir=`pwd -P`
 
 pyprog="$mydir/../CONFIG/autowrf_namelist_main.py"
+dateprog="$mydir/datecompare.py"
+datefmt='%Y-%m-%d_%H:%M:%S'
+
+
+# Input arguments: first and last date to process
+firstdate="$1"
+lastdate="$2"
 
 # Change into the WRF/run directory, get a list of the met_em files
 cd ../../WRFV3/run
@@ -18,6 +25,14 @@ for f in $mets; do
     if [[ $f =~ $regex ]]; then
         mdate="${BASH_REMATCH[0]}"
         echo "Met date = $mdate"
+        if [[ ! -z $firstdate ]] && $(python "$dateprog" -f "$datefmt" "$mdate" lt "$firstdate"); then
+            echo "Before first date $firstdate, skipping"
+            continue
+        elif [[ ! -z $lastdate ]] && $(python "$dateprog" -f "$datefmt" "$mdate" gt "$lastdate"); then
+            echo "After last date $lastdate, skipping"
+            continue
+        fi
+
         python $pyprog tempmod --start-date="$mdate" --run-time=0h --io_style_emissions=0 --emiss_inpt_opt=0 --bio_emiss_opt=0
         echo "Generating wrfinput for $mdate"
         ./real.exe
