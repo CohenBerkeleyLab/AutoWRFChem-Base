@@ -129,14 +129,14 @@ fi
 
 # Check if the met data was untarred yet or not
 if [[ $metType == 'NARR' ]]; then
-    grib_prefix = 'merged_AWIP32*'
+    grib_prefix='merged_AWIP32'
 else
     echo "Met type '$metType' not recognized"
 fi
 
 # If untarred files don't exist, we need to untar the necessary ones
 ls "${metDir}/${grib_prefix}"* >& /dev/null
-if [[ $? != 0 ]]
+if [[ $? != 0 ]]; then
     mkdir -p "$tarDir"
     cd "$tarDir"
     rm -f ${grib_prefix}* *.tar
@@ -144,6 +144,7 @@ if [[ $? != 0 ]]
     tarfiles=$(python "$pymet" "$metType" "$startdate" "$enddate")
     for f in $tarfiles; do
        # This will untar the pointed to file in the current directory
+       echo "Untarring ${metDir}/${f}"
        tar -xf "${metDir}/${f}"
     done
 
@@ -170,6 +171,7 @@ elif [[ ! -e GRIBFILE.AAA ]]; then
     echo "In ${wpsdir}: LINK_GRIB.CSH did not generate any valid GRIBFILE links."
     exit 1
 fi
+
 
 # Now run ungrib
 uglogfile="${wpsdir}_ungrib.log"
