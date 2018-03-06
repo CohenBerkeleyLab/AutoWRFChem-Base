@@ -27,6 +27,14 @@ if [ -z $mozbcFile ]; then
     exit 1
 fi
 
+if [[ ! -f $rootdir/WRFV3/run/wrfinput_d01 ]] || [[ ! -f $rootdir/WRFV3/run/wrfbdy_d01 ]]; then
+    echo "Rerunning real.exe"
+    cd $rootdir/WRFV3/run
+    ./real.exe
+else
+    echo "Found wrfinput_d01 and wrfbdy_d01, no need to rerun real.exe"
+fi
+
 wrfstart="$(python $pyprog get-wrf-opt --start-date)"
 wrfend="$(python $pyprog get-wrf-opt --end-date)"
 python "$mydir/mozcheck.py" "$rootdir/MOZBC/data/$mozbcFile" "$rootdir/WRFV3/run/wrfinput_d01" "$wrfend" "$wrfstart"

@@ -34,5 +34,5 @@
 &metgrid
  fg_name = 'FILE'
  io_form_metgrid = 2, 
- constants_name = '/global/home/groups/ac_aiolos/cohen/WPS_FIXED/NARRfixed.wps'
+ constants_name = '/global/home/groups/co_aiolos/cohen/WPS_FIXED/NARRfixed.wps'
 /
