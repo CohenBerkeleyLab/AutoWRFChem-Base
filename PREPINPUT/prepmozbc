@@ -27,26 +27,6 @@ if [ -z $mozbcFile ]; then
     exit 1
 fi
 
-if [[ ! -f $rootdir/WRFV3/run/wrfinput_d01 ]] || [[ ! -f $rootdir/WRFV3/run/wrfbdy_d01 ]]; then
-    echo "Rerunning real.exe"
-    cd $rootdir/WRFV3/run
-    ./real.exe
-    cd "$mydir"
-else
-    echo "Found wrfinput_d01 and wrfbdy_d01, no need to rerun real.exe"
-fi
-
-wrfstart="$(python $pyprog get-wrf-opt --start-date)"
-wrfend="$(python $pyprog get-wrf-opt --end-date)"
-python "$mydir/mozcheck.py" "$rootdir/MOZBC/data/$mozbcFile" "$rootdir/WRFV3/run/wrfinput_d01" "$wrfend" "$wrfstart"
-moztst=$?
-if [ $moztst -ne 0 ]; then
-    echo ""
-    echo "prepmozbc: See above problems with MOZBC input file." 
-    echo "Choose a different file with autowrfchem config namelist."
-    exit 1
-fi
-
 # Find out if the file is a GEOS-chem derived file. This ungodly long command prints the global attributes
 # for the file, finds the one called 'title', and cuts the string down to its value, trimming spaces at the
 # beginning and end. The grep specifically looks for "title" after "Global attribute n:" where n is a 1-4 
@@ -162,6 +142,20 @@ if [ $realexit -ne 0 ]; then
     echo "real.exe failed with exit code $realexit while running the full time period before"
     echo "running MOZBC. You should run real.exe manually (with mpirun, if WRF is compiled in"
     echo "parallel) and check the output to determine the cause."
+    exit 1
+fi
+
+# Check that the chosen MOZART file satisfies the buffer size around the WRF domain as well as the time period
+# needed. This needs to happen after running real.exe to ensure that the results are consistent with the 
+# final version of wrfinput
+wrfstart="$(python $pyprog get-wrf-opt --start-date)"
+wrfend="$(python $pyprog get-wrf-opt --end-date)"
+python "$mydir/mozcheck.py" "$rootdir/MOZBC/data/$mozbcFile" "$rootdir/WRFV3/run/wrfinput_d01" "$wrfend" "$wrfstart"
+moztst=$?
+if [ $moztst -ne 0 ]; then
+    echo ""
+    echo "prepmozbc: See above problems with MOZBC input file." 
+    echo "Choose a different file with autowrfchem config namelist."
     exit 1
 fi
 
