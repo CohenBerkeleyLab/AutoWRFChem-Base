@@ -29,6 +29,9 @@ pymet="$mydir/metgriblist.py"
 # Find the root directory.
 rootdir=$(cd ../..; pwd -P)
 
+# Define the subdirectory where we put to-be-untarred files
+tarDir="MetTARs"
+
 #############
 #### WPS ####
 #############
@@ -97,7 +100,8 @@ fi
 # long if there's a lot of irrelevant met files. We have python code
 # to list those files, given start and end dates, but we need to extract
 # the start and end dates from the namelist manually to allow for the 
-# split-met functionality.
+# split-met functionality. Also, we want to untar the archive files, if it isn't
+# done yet.
 regex='[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]:[0-9][0-9]:[0-9][0-9]'
 startline=$(grep 'start_date' namelist.wps)
 endline=$(grep 'end_date' namelist.wps)
@@ -123,10 +127,39 @@ if [[ $metDir == *[[:space:]]* ]]; then
     echo ""
 fi
 
-flist=$(python "$pymet" "$metType" "$startdate" "$enddate")
+# Check if the met data was untarred yet or not
+if [[ $metType == 'NARR' ]]; then
+    grib_prefix='merged_AWIP32'
+else
+    echo "Met type '$metType' not recognized"
+fi
+
+# If untarred files don't exist, we need to untar the necessary ones
+ls "${metDir}/${grib_prefix}"* >& /dev/null
+if [[ $? != 0 ]]; then
+    mkdir -p "$tarDir"
+    cd "$tarDir"
+    rm -f ${grib_prefix}* *.tar
+
+    tarfiles=$(python "$pymet" "$metType" "$startdate" "$enddate")
+    for f in $tarfiles; do
+       # This will untar the pointed to file in the current directory
+       echo "Untarring ${metDir}/${f}"
+       cp "${metDir}/${f}" .
+       tar -xf $f
+       rm $f
+    done
+
+    cd ..
+    linkDir="$tarDir"
+else
+    linkDir="$metDir"
+fi
+
+flist=$(python "$pymet" --grib "$metType" "$startdate" "$enddate")
 metfiles=""
 for f in $flist; do
-    metfiles="$metfiles ${metDir}/${f}"
+    metfiles="$metfiles ${linkDir}/${f}"
 done
 
 rm -f GRIBFILE*
@@ -140,6 +173,7 @@ elif [[ ! -e GRIBFILE.AAA ]]; then
     echo "In ${wpsdir}: LINK_GRIB.CSH did not generate any valid GRIBFILE links."
     exit 1
 fi
+
 
 # Now run ungrib
 uglogfile="${wpsdir}_ungrib.log"

@@ -62,8 +62,8 @@ fi
 enddate=$(python "$pyprog" get-wps-opt --end-date)
 
 # Clean up the WPS directory prior to copying
-echo "WARNING: will delete all met files in WPS and old WPS_nn directories in 60 sec"
-sleep 60
+echo "WARNING: will delete all met files in WPS and old WPS_nn directories in 15 sec"
+sleep 15
 
 ungrib_prefix="$(python $pyprog get-wps-opt --prefix --no-quotes)"
 cd "$rootdir"
@@ -94,6 +94,10 @@ while [[ $datechk == 1 ]]; do
 
     i=$((i+1))
 done
+
+# Had some trouble in the past with files not being present, so let's
+# give it some time to make sure everything's caught up
+sleep 10
 
 # Reset the main namelists to the full time period
 python "$pyprog" tempmod

@@ -49,20 +49,51 @@ def narr_next_sfc_date(curr_date):
     return curr_date + tdel
 
 
-def make_narr_list(start_date, end_date):
+def make_narr_grib_list(start_date, end_date):
     if (type(start_date) is not dt.datetime and type(start_date) is not dt.date or
-        type(end_date) is not dt.datetime and type(end_date) is not dt.date):
+            type(end_date) is not dt.datetime and type(end_date) is not dt.date):
         raise TypeError("start_date and end_date must be datetime or date objects")
 
     narr_files = []
-    list_narr_files(narr_files, start_date, end_date, "NARR3D_", 3)
-    list_narr_files(narr_files, start_date, end_date, "NARRflx_", 8)
-    list_narr_sfc_files(narr_files, start_date, end_date)
+    narr_files += list_narr_grib_files(start_date, end_date, '3D')
+    narr_files += list_narr_grib_files(start_date, end_date, 'RS.flx')
+    narr_files += list_narr_grib_files(start_date, end_date, 'RS.sfc')
 
     return narr_files
 
 
-def list_narr_files(narr_files, start_date, end_date, stem, ndays, extension="tar"):
+def list_narr_grib_files(start_date, end_date, suffix):
+    # NARR files are every 3 hours, so make sure the start date is at the beginning of a three
+    # hour block
+    start_date = start_date.replace(minute=0, second=0, microsecond=0)
+    start_hour = start_date.hour
+    if start_hour % 3 != 0:
+        start_date = start_date.replace(start_hour - (start_hour % 3))
+
+    file_pattern = 'merged_AWIP32.{date}.{suffix}'
+    files = []
+    curr_date = start_date
+    while curr_date <= end_date:
+        files.append(file_pattern.format(date=curr_date.strftime('%Y%m%d%H'), suffix=suffix))
+        curr_date += dt.timedelta(hours=3)
+
+    return files
+
+
+def make_narr_tar_list(start_date, end_date):
+    if (type(start_date) is not dt.datetime and type(start_date) is not dt.date or
+            type(end_date) is not dt.datetime and type(end_date) is not dt.date):
+        raise TypeError("start_date and end_date must be datetime or date objects")
+
+    narr_files = []
+    list_narr_tar_files(narr_files, start_date, end_date, "NARR3D_", 3)
+    list_narr_tar_files(narr_files, start_date, end_date, "NARRflx_", 8)
+    list_narr_sfc_tar_files(narr_files, start_date, end_date)
+
+    return narr_files
+
+
+def list_narr_tar_files(narr_files, start_date, end_date, stem, ndays, extension="tar"):
     # NARR files come in multi day groups, the file names are of the format
     # NARRxxx_YYYYMM_SSEE.tar, where YYYY is the year, MM the month, SS the first
     # day of the three day group and EE the last. xxx varies depending on the file type,
@@ -95,7 +126,7 @@ def list_narr_files(narr_files, start_date, end_date, stem, ndays, extension="ta
             curr_date = curr_date.replace(day=1)
 
 
-def list_narr_sfc_files(narr_files, start_date, end_date, extension="tar"):
+def list_narr_sfc_tar_files(narr_files, start_date, end_date, extension="tar"):
     # The sfc files are annoying because they use the date ranges 1-9, 10-19, and 20-eom, rather than being consistent.
     # So of course they need special handling
     curr_date = start_date
@@ -117,7 +148,7 @@ def list_narr_sfc_files(narr_files, start_date, end_date, extension="tar"):
 def parse_args():
     allowed_mets = ["narr"]
     parser = argparse.ArgumentParser(description='Generate the list of meteorology files expected by WPS for a given '
-                                                 'date range',
+                                                 'date range (either the .tar archives or the actual GRIB files)',
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("mettype", help="Which type of meteorology to generate file names for. Allowed values (case insensitive): {0}".
                         format(", ".join(allowed_mets)))
@@ -125,6 +156,7 @@ def parse_args():
     parser.add_argument("enddate", help="The last date of the WRF run, in yyyy-mm-dd_HH:MM:SS format")
     parser.add_argument("-l", action="store_const", const="\n", default=" ",
                         help="Print the files one per line (rather than space delimited)")
+    parser.add_argument("--grib", action="store_true", help="List the GRIB files, rather than the default .tar files")
 
     inputs = parser.parse_args()
     if inputs.mettype.lower() not in allowed_mets:
@@ -145,16 +177,17 @@ def parse_args():
         exit(1)
 
     start_datetime = dt.datetime.strptime(inputs.startdate, "%Y-%m-%d_%H:%M:%S")
-    start_date = dt.date(start_datetime.year, start_datetime.month, start_datetime.day)
     end_datetime = dt.datetime.strptime(inputs.enddate, "%Y-%m-%d_%H:%M:%S")
-    end_date = dt.date(end_datetime.year, end_datetime.month, end_datetime.day)
-    return inputs.mettype.lower(), start_date, end_date, inputs.l
+    return inputs.mettype.lower(), start_datetime, end_datetime, inputs.l, inputs.grib
 
 #### MAIN FUNCTION #####
 if __name__ == "__main__":
-    met, start_date, end_date, delim = parse_args()
+    met, start_datetime, end_datetime, delim, do_grib = parse_args()
     if met == "narr":
-        files = make_narr_list(start_date, end_date)
+        if do_grib:
+            files = make_narr_grib_list(start_datetime, end_datetime)
+        else:
+            files = make_narr_tar_list(start_datetime.date(), end_datetime.date())
         print(delim.join(files))
     else:
         raise RuntimeError("No action specified for met type {0}".format(met))

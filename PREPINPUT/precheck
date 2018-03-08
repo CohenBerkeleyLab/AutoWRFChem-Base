@@ -104,7 +104,21 @@ if ! $chemonly; then
 
     # Verify that the raw met files needed are present in the met directory
     if ! $nometdir; then
-        reqmetfiles=$(python "$mydir/metgriblist.py" "$metType" "$wrfstart" "$wrfend")
+        # Check if the met directory has untarred GRIB files or tar archives
+        if [[ $metType == 'NARR' ]]; then
+            grib_prefix='merged_AWIP32'
+        else
+            echo "Met type '$metType' not recognized"
+        fi
+        
+        ls "${metDir}/${grib_prefix}"* >& /dev/null
+        if [[ $? != 0 ]]; then
+            look_for_grib=""
+        else
+            look_for_grib="--grib"
+        fi
+
+        reqmetfiles=$(python "$mydir/metgriblist.py" $look_for_grib "$metType" "$wrfstart" "$wrfend")
         cd "$metDir"
         missingMetFiles=""
         for metfile in $reqmetfiles; do
