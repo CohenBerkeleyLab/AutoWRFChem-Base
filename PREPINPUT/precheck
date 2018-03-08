@@ -118,7 +118,7 @@ if ! $chemonly; then
             look_for_grib="--grib"
         fi
 
-        reqmetfiles=$(python "$mydir/metgriblist.py" "$look_for_grib" "$metType" "$wrfstart" "$wrfend")
+        reqmetfiles=$(python "$mydir/metgriblist.py" $look_for_grib "$metType" "$wrfstart" "$wrfend")
         cd "$metDir"
         missingMetFiles=""
         for metfile in $reqmetfiles; do
