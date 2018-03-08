@@ -31,6 +31,7 @@ if [[ ! -f $rootdir/WRFV3/run/wrfinput_d01 ]] || [[ ! -f $rootdir/WRFV3/run/wrfb
     echo "Rerunning real.exe"
     cd $rootdir/WRFV3/run
     ./real.exe
+    cd "$mydir"
 else
     echo "Found wrfinput_d01 and wrfbdy_d01, no need to rerun real.exe"
 fi

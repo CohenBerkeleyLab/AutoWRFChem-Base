@@ -31,7 +31,15 @@ run_sdate=$(python $pyprog get-wps-opt --no-quotes --start_date)
 run_edate=$(python $pyprog get-wps-opt --no-quotes --end_date)
 
 emi_sdate=$(python $pyemiyr 00z $run_sdate $run_edate)
-python $pyprog tempmod --start-date=${emi_sdate} --run-time=11h --bio_emiss_opt=0 $fdda_args
+# Set up the namelist to run the first 12 hour period for convert_emiss.exe. The emi_sdate (emissions start date)
+# is set up to be in the year that we want to scale emissions to. --run-time=11 h is necessary to generate the
+# first 12 hours; convert_emiss seems to take the start date and run time rather than the start and end dates.
+# Since we have no MEGAN data yet, bio_emiss_opt cannot be 3, so set it to 0. Setting restart to .false. deals
+# with an unusual case where I was running from a restart file with new boundary conditions, with restart=.true.,
+# it tried to find a restart file during the second 12-hour span, which obviously didn't exist. fdda_args turns
+# off the FDDA nudging for real.exe only if it's been turned on; if the gfdda section of the namelist is missing,
+# then trying to set that value gives an error.
+python $pyprog tempmod --start-date=${emi_sdate} --run-time=11h --bio_emiss_opt=0 --restart=.false. $fdda_args
 # Now we go over to the run directory. Backup any existing wrfchemi files, then
 # run real.exe followed by convert_emiss.exe
 cd ../../WRFV3/run
@@ -77,9 +85,9 @@ if [ ! -f wrfchemi_00z_d01 ]; then
 fi
 
 
-# Now set up for the second 12 hr segment
+# Now set up for the second 12 hr segment. See the first 12 hr segment for the reasoning behing all the options.
 emi_sdate=$(python $pyemiyr 12z $run_sdate $run_edate)
-python $pyprog tempmod --start-date=${emi_sdate} --run-time=11h --bio_emiss_opt=0 $fdda_args
+python $pyprog tempmod --start-date=${emi_sdate} --run-time=11h --bio_emiss_opt=0 --restart=.false. $fdda_args
 
 ./real.exe
 realexit=$?
