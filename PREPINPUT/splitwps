@@ -38,7 +38,7 @@ if [[ ! -z $subfile ]]; then
     dosubmit=true
     grep '#AUTOWRFEXEC' "$subfile" >& /dev/null
     if [[ $? != 0 ]]; then
-        echo "File passed with --subfile= must have a line containing '#AUTOWRFEXEC' to be replaced with the necessary commands." >&2
+        echo "File passed with --subfile= must have a line containing '#AUTOWRFEXEC' to be replaced with the necessary commands. Aborting split WPS run." >&2
         exit 1
     fi
 fi

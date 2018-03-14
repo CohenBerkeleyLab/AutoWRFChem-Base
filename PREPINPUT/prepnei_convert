@@ -66,6 +66,7 @@ if [ $realexit -ne 0 ]; then
     echo "real.exe failed with exit code $realexit when running the 00-12z period for NEI emissions"
     echo "You should run it directly (with mpirun if compiled in parallel) and check any output to"
     echo "identify the problem"
+    echo "Skipping the remainder of convert_emiss"
     exit 1
 fi
 
@@ -73,7 +74,7 @@ fi
 convexit=$?
 cp -f rsl.error.0000 $mydir/../PREPLOGS/convert_00z.log
 if [ $convexit -ne 0 ]; then
-    echo "convert_emiss.exe failed with exit code $realexit when running the 00-12z period for NEI"
+    echo "convert_emiss.exe failed with exit code $convexit when running the 00-12z period for NEI"
     echo "emissions. You should run it directly (with mpirun if compiled in parallel) and check any"
     echo "output to identify the problem"
     exit 1
@@ -102,7 +103,7 @@ fi
 convexit=$?
 cp -f rsl.error.0000 $mydir/../PREPLOGS/convert_12z.log
 if [ $convexit -ne 0 ]; then
-    echo "convert_emiss.exe failed with exit code $realexit when running the 12-24z period for NEI"
+    echo "convert_emiss.exe failed with exit code $convexit when running the 12-24z period for NEI"
     echo "emissions. You should run it directly (with mpirun if compiled in parallel) and check any"
     echo "output to identify the problem"
     exit 1

@@ -133,6 +133,7 @@ if $usekpp; then
             fi
         fi
         if $doexit; then
+            echo "Aborting configuration"
             exit 1
         fi
     else

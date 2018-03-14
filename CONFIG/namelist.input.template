@@ -154,6 +154,8 @@
  aer_ra_feedback                     = 0,        0,
  chem_conv_tr                        = 1,        1,
  diagnostic_chem                     = 3,        3,
+ scale_nei_emis                      = .true.,
+ scale_closest_year                  = .false.,
 /
 
  &namelist_quilt

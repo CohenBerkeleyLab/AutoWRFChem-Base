@@ -203,7 +203,11 @@ if ! $metonly; then
 
     # Now check the MOZBC file
     cd "$rootdir/MOZBC"
-    if [ ! -f "data/$mozbcFile" ]; then
+    if [ -z $mozbcFile ]; then
+        echo ""
+        echo "mozbcFile has not been set. Please run 'autowrfchem config namelist' and use the 'Select MOZBC File' option"
+        badopts=true
+    elif [ ! -f "data/$mozbcFile" ]; then
         echo ""
         echo "Cannot find data/$mozbcFile"
         echo "from the MOZBC directory. Is the data directory or link present?"
@@ -229,6 +233,8 @@ if ! $metonly; then
 fi
 
 if $badopts; then
+    echo ""
+    echo "One or more options or settings are incorrect, aborting input preparation"
     exit 1
 else
     exit 0

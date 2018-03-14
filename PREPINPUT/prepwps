@@ -91,6 +91,7 @@ gglogfile="${wpsdir}_geogrid.log"
 ggexit=$?
 if [[ $ggexit != 0 ]]; then
     echo "In ${wpsdir}: GEOGRID.exe failed with exit code $ggexit"
+    echo "Aborting the remainer of WPS"
     exit 1
 fi
 
@@ -168,9 +169,11 @@ rm -f GRIBFILE*
 lnkexit=$?
 if [[ $lnkexit != 0 ]]; then
     echo "In ${wpsdir}: LINK_GRIB.CSH failed with exit code $lnkexit"
+    echo "Aborting the remainer of WPS"
     exit 1
 elif [[ ! -e GRIBFILE.AAA ]]; then
     echo "In ${wpsdir}: LINK_GRIB.CSH did not generate any valid GRIBFILE links."
+    echo "Aborting the remainer of WPS"
     exit 1
 fi
 
@@ -181,6 +184,7 @@ uglogfile="${wpsdir}_ungrib.log"
 ugexit=$?
 if [[ $ugexit != 0 ]]; then
     echo "In ${wpsdir}: UNGRIB.EXE failed with exit code $ugexit"
+    echo "Aborting the remainer of WPS"
     exit 1
 fi
 
@@ -191,6 +195,7 @@ mglogfile="${wpsdir}_metgrid.log"
 mgexit=$?
 if [[ $mgexit != 0 ]]; then
     echo "In ${wpsdir}: METGRID.EXE failed with exit code $mgexit"
+    echo "Met files will not be linked to the run directory"
     exit 1
 fi
 

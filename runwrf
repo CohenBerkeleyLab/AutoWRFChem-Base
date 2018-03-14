@@ -129,12 +129,12 @@ if $rst; then
             fi
             python $pyprog tempmod --start-date="$rdate" --restart=".true." $runtimearg
         else
-            echo "$myname: Could not determine date of restart file ($rstfile)"
+            echo "$myname: Could not determine date of restart file ($rstfile), aborting run"
             exit 1
         fi
     else
         if $errnorst; then
-            echo "$myname: No restart file in the time period of the namelist found"
+            echo "$myname: No restart file in the time period of the namelist found, aborting run"
             exit 1
         else
             echo "No restart file in the time period of the namelist found, starting at beginning"
@@ -148,7 +148,7 @@ fi
 # Format the run command
 if $useenvcmd; then
     if [[ -z $AWC_MPICMD ]]; then
-        echo "Error trying to use --alt-mpi-cmd: Environmental variable AWC_MPICMD not set"
+        echo "Error trying to use --alt-mpi-cmd: Environmental variable AWC_MPICMD not set, aborting run"
         exit 1
     fi
     runcmd="$AWC_MPICMD"

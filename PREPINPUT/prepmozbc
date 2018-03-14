@@ -18,12 +18,14 @@ chemopt=`python $pyprog get-wrf-opt --chem_opt`
 
 if [ -z "$chemopt" ]; then
     echo "Failed to obtain the value of chem_opt. I do not know why that happened."
+    echo "Aborting MOZBC"
     exit 1
 fi
 
 . "$mydir/../wrfbuild.cfg" # this will get the variable mozbcFile
 if [ -z $mozbcFile ]; then
     echo "No mozbc file set in wrfbuild.cfg! Use autowrfchem config namelist to choose one."
+    echo "Aborting MOZBC"
     exit 1
 fi
 
@@ -61,6 +63,7 @@ if [ -z "$mozfile" ]; then
     echo "You should edit the list file to specify the correct input"
     echo "file for your chemistry. If there isn't one, specify the file"
     echo "as NONE."
+    echo "Aborting MOZBC"
     exit 1
 elif [ "$mozfile" == "NONE" ]; then
     echo "No MOZART --> WRF-Chem mapping available for chem_opt=$chemopt"
@@ -86,6 +89,7 @@ echo "Using $mozfile as the input"
 cd ../../MOZBC/src
 if [ ! -f "$mozfile" ]; then
     echo "$mozfile (the specified .inp file for chem_opt=$chemopt does not exist."
+    echo "Aborting MOZBC"
     exit 1
 fi
 
@@ -109,6 +113,8 @@ if [ ! -f "wrfbiochemi_d01" ]; then
     missingfiles=true
 fi
 if $missingfiles; then
+    echo "Aborting MOZBC because previous input preparation steps failed."
+    echo ""
     exit 1
 fi
 
@@ -121,17 +127,20 @@ if [[ $FDDA_ON == 1 ]]; then
         echo "Problem with prepmozbc: the main prepinpt script found that grid_fdda==1 in namelist.input"
         echo "at the beginning of the input prep run and set the env. variable FDDA_ON to 1, but grid_fdda"
         echo "did not get returned to 1 in the namelist before running the last instance of real.exe"
+        echo "Aborting MOZBC"
         exit 1
     elif [[ $fdda_check == 2 ]]; then
         echo "Problem with prepmozbc: the main prepinpt script found that grid_fdda==1 in namelist.input"
         echo "at the beginning of the input prep run and set the env. variable FDDA_ON to 1, but grid_fdda"
         echo "does not exist in the namelist now." 
+        echo "Aborting MOZBC"
         exit 1
     elif [[ $fdda_check != 0 ]]; then
         echo "Problem with prepmozbc: checking for the value of grid_fdda failed with an exit code of $fdda_check"
         echo "Typically, the only exit codes should be 0 (option is correct), 1 (option is wrong), or 2"
         echo "(option not found in namelist). Has $pyprog"
         echo "been updated since the last time prepmozbc was edited?"
+        echo "Aborting MOZBC"
         exit 1 
     fi
 fi
@@ -142,6 +151,7 @@ if [ $realexit -ne 0 ]; then
     echo "real.exe failed with exit code $realexit while running the full time period before"
     echo "running MOZBC. You should run real.exe manually (with mpirun, if WRF is compiled in"
     echo "parallel) and check the output to determine the cause."
+    echo "Aborting MOZBC"
     exit 1
 fi
 
@@ -156,6 +166,7 @@ if [ $moztst -ne 0 ]; then
     echo ""
     echo "prepmozbc: See above problems with MOZBC input file." 
     echo "Choose a different file with autowrfchem config namelist."
+    echo "Aborting MOZBC"
     exit 1
 fi
 
