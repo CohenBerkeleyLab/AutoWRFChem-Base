@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 import sys
 import os
 import datetime as dt
@@ -126,7 +126,7 @@ def SaveMenu(nlc):
 
         nlc.WriteNamelists(dir=NamelistsPath(), suffix=suffix)
 
-        userans = raw_input("Do you also write to make these the current namelist? y/[n]: ")
+        userans = input("Do you also write to make these the current namelist? y/[n]: ")
         if userans.lower() == "y":
             print("Writing out namelists.")
             nlc.WriteNamelists(dir=my_dir)

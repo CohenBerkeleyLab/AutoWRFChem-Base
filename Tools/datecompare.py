@@ -3,7 +3,7 @@
 # datecompare.py - python script that can be used to compare two dates given as strings
 #   Gives exit status of 0 if comparison is true, 1 if false, so can be used in shell if
 #   statements.
-from __future__ import print_function
+
 import argparse
 import datetime as dt
 import re

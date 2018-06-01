@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 import datetime as dt
 import math
 from collections import OrderedDict
@@ -64,9 +64,9 @@ class Namelist:
 
     def WriteNamelist(self, out_filename):
         with open(out_filename, 'w') as f:
-            for sect, optlist in self.opts.iteritems():
+            for sect, optlist in self.opts.items():
                 f.write("&"+sect+"\n")
-                for optname, optvals in optlist.iteritems():
+                for optname, optvals in optlist.items():
                     padding = " " * (self.opt_field_width - len(optname) - 1)
                     f.write(" "+optname+padding+"= ")
                     for val in optvals:
@@ -416,7 +416,7 @@ class WpsNamelist(Namelist):
         # Setting neiproj to true will alter the messages printed if options are changed.
         proj_opts, all_opts = self.MapProjOptions(map_proj)
         # All these options are in the "geogrid" section
-        curr_opts = self.opts["geogrid"].keys()
+        curr_opts = list(self.opts["geogrid"].keys())
         opt_added = False
         opt_removed = False
         for opt in all_opts:
@@ -444,7 +444,7 @@ class WpsNamelist(Namelist):
                 msg_print("geogrid options have changed with the map projection.")
                 msg_print("The NEI compatibility checker will help you set them.")
 
-            junk = raw_input("Press ENTER to continue.")
+            junk = input("Press ENTER to continue.")
 
 
 class NamelistContainer:
@@ -850,7 +850,7 @@ class NamelistContainer:
             msg_print("This must be created and contain your MOZBC files. Both")
             msg_print("this program and the MOZBC component of the automatic WRF")
             msg_print("program rely on this.")
-            raw_input("Press ENTER to continue")
+            input("Press ENTER to continue")
             return None
 
         tmp = glob(os.path.join(mozDataDir, "*.nc"))
@@ -859,7 +859,7 @@ class NamelistContainer:
             msg_print("No MOZBC data files present! You need to download some.")
             msg_print("As of 20 Jul 2016, they can be obtained at")
             msg_print("http://www.acom.ucar.edu/wrf-chem/mozart.shtml")
-            raw_input("Press ENTER to continue")
+            input("Press ENTER to continue")
             return None
 
         newMozFilename = UI.UserInputList("Choose the MOZBC file to use: ", mozFiles,currentvalue=mozFilename)
@@ -870,7 +870,7 @@ class NamelistContainer:
             msg_print("the input preparation step. Rerunning 'autowrfchem config namelist'")
             msg_print("and modifying the current namelist will allow you to select a file")
             msg_print("later.")
-            raw_input("Press ENTER to continue")
+            input("Press ENTER to continue")
             return None
         
         wroteMoz=False
@@ -885,11 +885,11 @@ class NamelistContainer:
                 cfgw.write("mozbcFile=\"{0}\"\n".format(newMozFilename))
 
     def UserSetOtherOpt(self, namelist):
-        sect = UI.UserInputList("Choose the namelist section: ", namelist.opts.keys())
+        sect = UI.UserInputList("Choose the namelist section: ", list(namelist.opts.keys()))
         if sect is None:
             return
 
-        k = namelist.opts[sect].keys()
+        k = list(namelist.opts[sect].keys())
         if len(k) == 0:
             msg_print("{0} has no options".format(sect))
             return
@@ -913,16 +913,16 @@ class NamelistContainer:
                 namelist.SetOptVal(sect, opt, optval)
 
     def DisplayOptions(self, namelist):
-        sectnames = namelist.opts.keys()
+        sectnames = list(namelist.opts.keys())
         sectnames.append("All")
         sect = UI.UserInputList("Which namelist section to display?", sectnames)
         if sect == "All":
-            for s in namelist.opts.keys():
+            for s in list(namelist.opts.keys()):
                 msg_print("{0}:".format(s))
-                for k,v in namelist.opts[s].iteritems():
+                for k,v in namelist.opts[s].items():
                     msg_print("  {0} = {1}".format(k,v))
         elif sect is not None:
-            for k,v in namelist.opts[sect].iteritems():
+            for k,v in namelist.opts[sect].items():
                 msg_print("  {0} = {1}".format(k,v))
 
     def UserNEICompatCheck(self):
@@ -1111,7 +1111,7 @@ class UI:
             print("  {2}{0}: {1}".format(i, options[i-1], currstr))
 
         while True:
-            userans = raw_input("Enter 1-{0}: ".format(len(options)))
+            userans = input("Enter 1-{0}: ".format(len(options)))
             if len(userans) == 0:
                 return None
 
@@ -1146,7 +1146,7 @@ class UI:
             print("Current value is {0}".format(currentvalue))
 
         while True:
-            userdate = raw_input("--> ")
+            userdate = input("--> ")
             userdate = userdate.strip()
             if len(userdate) == 0:
                 return None
@@ -1188,7 +1188,7 @@ class UI:
             # Take advantage of datetime's built in checking to be sure we have a valid date
             try:
                 dateout = dt.datetime(yr,mn,dy,hour,min,sec)
-            except ValueError, e:
+            except ValueError as e:
                 print("Problem with date/time entered: {0}".format(str(e)))
                 continue
 
@@ -1207,7 +1207,7 @@ class UI:
 
         while True:
             if isbool:
-                userans = raw_input("T/F: ").lower().strip()
+                userans = input("T/F: ").lower().strip()
                 if userans == "t":
                     return ".true."
                 elif userans == "f":
@@ -1217,7 +1217,7 @@ class UI:
                 else:
                     print("Option is a boolean. Must enter T or F.")
             else:
-                userans = raw_input("--> ").strip()
+                userans = input("--> ").strip()
                 if len(userans) == 0 and not noempty:
                     return None
                 elif len(userans) == 0 and noempty:
@@ -1234,7 +1234,7 @@ class UI:
             else:
                 defstr = " y/[n]"
                 defaultans = False
-            userans = raw_input(prompt + defstr + ": ")
+            userans = input(prompt + defstr + ": ")
 
             if userans == "":
                 return defaultans

@@ -11,7 +11,7 @@
 #               4 bit: on = wrfinput missing variables, off = variables below min threshold
 #               8 bit = problem with wrfbdy
 #               16 bit: on = wrfbdy missing variables, off = variables below min threshold
-from __future__ import print_function
+
 import pdb
 import argparse
 import re
@@ -38,7 +38,7 @@ def get_var_names(filename):
         return pync.call_ncdump_varnames(filename)
     else:
         rgrp = ncdat(filename)
-        return rgrp.variables.keys()
+        return list(rgrp.variables.keys())
         rgrp.close()
 
 def get_var_values(varnames, filename):

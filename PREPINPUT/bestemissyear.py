@@ -2,7 +2,7 @@
 # best represents the emissions for it and prints out a start
 # date which can be used by the namelist program to set the
 # start date for convert_emiss.F
-from __future__ import print_function
+
 import datetime as dt
 import argparse
 import re

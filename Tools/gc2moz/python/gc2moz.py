@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 import argparse
 from bpch import bpch
 import datetime as dt
@@ -166,9 +166,9 @@ def unit_conversion(current_values, unit_type, current_unit, new_unit):
     else:
         raise ValueError('Unit type "{0}" not recognized'.format(unit_type))
 
-    if current_unit not in conv_factors.keys():
+    if current_unit not in list(conv_factors.keys()):
         raise KeyError('{0} unit "{1}" not defined'.format(unit_type, current_unit))
-    if new_unit not in conv_factors.keys():
+    if new_unit not in list(conv_factors.keys()):
         raise KeyError('{0} unit "{1}" not defined'.format(unit_type, new_unit))
 
     return current_values * conv_factors[new_unit] / conv_factors[current_unit]
@@ -400,13 +400,13 @@ def write_chem_species(ncfile, filetimes):
     # Find all GEOS variables in the categories defined as static variables
     b = bpch(filetimes.unique_files()[0])
     gc_moz_names = {} # this will be a dictionary with the GC name as the key and the MOZART-like name as the value
-    for k in b.variables.keys():
+    for k in list(b.variables.keys()):
         for cat in gc_categories:
             if cat in k:
                 gc_moz_names[k] = geos_to_moz_name(k)
     b.close()
 
-    for gc_name, moz_name in gc_moz_names.iteritems():
+    for gc_name, moz_name in gc_moz_names.items():
         if __debug_level__ > 1:
             shell_msg('  Writing {0} as {1}'.format(gc_name, moz_name))
         val = []
@@ -452,7 +452,7 @@ def add_methane(ncfile):
     lat = ncfile.variables['lat'][:]
 
     # Find a chemistry variable to get the shape of
-    for k in ncfile.variables.keys():
+    for k in list(ncfile.variables.keys()):
         if moz_suffix in k:
             chem_key = k
             break

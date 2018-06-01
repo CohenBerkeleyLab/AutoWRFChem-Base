@@ -1,5 +1,5 @@
 # check that the given Mozart file covers the time range and the domain plus a 10 degree buffer
-from __future__ import print_function
+
 import argparse
 import datetime as dt
 import os
