@@ -55,12 +55,12 @@ def get_run_info(wrfin, stime_str, etime_str):
 def convert_moz_date(dateint, datesec):
     # MOZ dates are given as an integer with 8 digits. The first four are year, then two month, then two for day
     # Some arithmetic sneakiness to break it apart
-    yr = dateint/10000
-    mn = (dateint % 10000)/100
+    yr = dateint//10000
+    mn = (dateint % 10000)//100
     dy = dateint % 100
 
-    hour = datesec / 3600
-    minute = (datesec % 3600)/60
+    hour = datesec // 3600
+    minute = (datesec % 3600)//60
     sec = datesec % 60
     return dt.datetime(year=yr, month=mn, day=dy, hour=hour, minute=minute, second=sec)
 
