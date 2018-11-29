@@ -44,13 +44,13 @@ def SelectPreexistingNamelists():
 
     print("Select the namelist files to use. If there is a discrepancy in the domain, the WPS file")
     print("takes precedence.")
-    wrffile = UI.UserInputList("Choose the WRF namelist: ", wrffiles)
+    wrffile = UI.user_input_list("Choose the WRF namelist: ", wrffiles)
     if wrffile == template_name:
         wrffile = wrf_namelist_template_file
     elif wrffile is not None:
         wrffile = os.path.join(NamelistsPath(), wrffile)
 
-    wpsfile = UI.UserInputList("Choose the WPS namelist: ", wpsfiles)
+    wpsfile = UI.user_input_list("Choose the WPS namelist: ", wpsfiles)
     if wpsfile == template_name:
         wpsfile = wps_namelist_template_file
     elif wpsfile is not None:
@@ -64,7 +64,7 @@ def LoadMenu():
             "Modify the current namelists",
             "Quit"]
 
-    loadmethod = UI.UserInputList("What namelist would you like to load?", opts, returntype="index")
+    loadmethod = UI.user_input_list("What namelist would you like to load?", opts, returntype="index")
     if loadmethod == 0:
         return WRF.NamelistContainer(wrffile=wrf_namelist_template_file, wpsfile=wps_namelist_template_file)
     elif loadmethod == 1:
@@ -106,7 +106,7 @@ def SaveMenu(nlc):
             "Write just the namelist files (not pickle - i.e. temporary namelists)",
             "Save namelists to NAMELISTS folder for later",
             "Do not save"]
-    sel = UI.UserInputList("Save the namelists?", opts, returntype="index")
+    sel = UI.user_input_list("Save the namelists?", opts, returntype="index")
 
     my_dir = os.path.dirname(__file__)
 
@@ -117,9 +117,9 @@ def SaveMenu(nlc):
         nlc.WriteNamelists(dir=my_dir)
     elif sel == 2:
         while True:
-            suffix = UI.UserInputValue("suffix",noempty=True)
+            suffix = UI.user_input_value("suffix", noempty=True)
             if os.path.isfile(os.path.join(NamelistsPath(),"namelist.input.{0}".format(suffix))) or os.path.isfile(os.path.join(NamelistsPath(),"namelist.wps.{0}".format(suffix))):
-                if UI.UserInputYN("{0} is already used. Overwrite?".format(suffix), default="n"):
+                if UI.user_input_yn("{0} is already used. Overwrite?".format(suffix), default="n"):
                     break
             else:
                 break
@@ -141,7 +141,7 @@ def StartMenu():
             "Show help",
             "Quit"]
     while True:
-        sel = UI.UserInputList("What would you like to do?",opts,returntype="index", emptycancel=False)
+        sel = UI.user_input_list("What would you like to do?", opts, returntype="index", emptycancel=False)
         if sel == 0:
             return LoadMenu()
         elif sel == 1:

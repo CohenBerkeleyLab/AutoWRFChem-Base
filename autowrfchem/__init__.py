@@ -5,6 +5,7 @@ import os
 #######################################
 
 _pkg_dir = os.path.abspath(os.path.dirname(__file__))
+_config_dir = os.path.abspath(os.path.join(_pkg_dir, '..', 'CONFIG'))
 _wrf_dir_default = os.path.abspath(os.path.join(_pkg_dir, '..', 'WRFV3'))
 
 

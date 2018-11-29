@@ -537,11 +537,11 @@ class NamelistContainer:
 
     def UserSetTimePeriod(self):
         curr_start, curr_end = self.wps_namelist.GetTimePeriod()
-        start_time = UI.UserInputDate("Enter the starting date", currentvalue=curr_start)
+        start_time = UI.user_input_date("Enter the starting date", currentvalue=curr_start)
         if start_time is None:
             start_time = curr_start
 
-        end_time = UI.UserInputDate("Enter the ending date", currentvalue=curr_end)
+        end_time = UI.user_input_date("Enter the ending date", currentvalue=curr_end)
         if end_time is None:
             end_time = curr_end
 
@@ -552,7 +552,7 @@ class NamelistContainer:
 
     def UserSetDomain(self):
         for opt in self.domain_opts:
-            optval = UI.UserInputValue(opt, currval=self.wps_namelist.GetOptValNoSect(opt, 1))
+            optval = UI.user_input_value(opt, currval=self.wps_namelist.GetOptValNoSect(opt, 1))
             if optval is not None:
                 self.wrf_namelist.SetOptValNoSect(opt, optval)
                 self.wps_namelist.SetOptValNoSect(opt, optval)
@@ -560,7 +560,7 @@ class NamelistContainer:
         NamelistContainer.UserSetMozFile()
 
     def UserSetMet(self):
-        met_type = UI.UserInputList("Choose your meteorology: ", self.GetTypeList(self.met_fname))
+        met_type = UI.user_input_list("Choose your meteorology: ", self.GetTypeList(self.met_fname))
         self.SetMet(met_type)
 
     def SetMet(self, met_type):
@@ -607,7 +607,7 @@ class NamelistContainer:
             msg_print("No chem types defined in {0}".format(self.chem_fname))
             return
 
-        chem_type = UI.UserInputList("Choose a chemistry type: ", chem_types)
+        chem_type = UI.user_input_list("Choose a chemistry type: ", chem_types)
         if chem_type is not None:
             self.SetChem(chem_type)
 
@@ -622,14 +622,14 @@ class NamelistContainer:
             proj_list = self.wps_namelist.allowed_proj
 
 
-        optval = UI.UserInputList("Choose a map projection: ", proj_list,
-                                      currentvalue=self.wps_namelist.GetOptValNoSect("map_proj", 1, noquotes=True))
+        optval = UI.user_input_list("Choose a map projection: ", proj_list,
+                                    currentvalue=self.wps_namelist.GetOptValNoSect("map_proj", 1, noquotes=True))
         if optval is not None:
             self.wps_namelist.SetMapProj(optval, neionly)
 
     def UserSetFDDAEnd(self):
 
-        whole_run = UI.UserInputYN("Use FDDA nudging for the entire run?")
+        whole_run = UI.user_input_yn("Use FDDA nudging for the entire run?")
         if whole_run:
             run_hours = self.wrf_namelist.GetRunTime(runtime_unit="hours")
             run_hours = int(math.ceil(run_hours))
@@ -638,7 +638,7 @@ class NamelistContainer:
             msg_print("gfdda_end_h set to {0}".format(run_hours))
         else:
             self.wrf_namelist.update_fdda_end = False
-            optval = UI.UserInputValue("gfdda_end_h", currval=self.wrf_namelist.GetOptValNoSect("gfdda_end_h", 1))
+            optval = UI.user_input_value("gfdda_end_h", currval=self.wrf_namelist.GetOptValNoSect("gfdda_end_h", 1))
 
             if optval is not None:
                 self.wrf_namelist.SetOptVal("fdda", "gfdda_end_h", optval)
@@ -718,7 +718,7 @@ class NamelistContainer:
                 if not found_kpp:
                     msg_print("** Note: {0} requires WRF to be compiled with KPP enabled but WRF_KPP is not set to 1 in".format(chem_type))
                     msg_print(self.envvar_fname)
-                    if not UI.UserInputYN("Do you still wish to choose this chemistry?", default="n"):
+                    if not UI.user_input_yn("Do you still wish to choose this chemistry?", default="n"):
                         return None
             else:
                 msg_print("** Note: {0} requires WRF to be compiled with KPP enabled. Could not find\n"
@@ -862,7 +862,7 @@ class NamelistContainer:
             raw_input("Press ENTER to continue")
             return None
 
-        newMozFilename = UI.UserInputList("Choose the MOZBC file to use: ", mozFiles,currentvalue=mozFilename)
+        newMozFilename = UI.user_input_list("Choose the MOZBC file to use: ", mozFiles, currentvalue=mozFilename)
         if newMozFilename is None and mozFilename is not None:
             newMozFilename = mozFilename
         elif newMozFilename is None:
@@ -885,7 +885,7 @@ class NamelistContainer:
                 cfgw.write("mozbcFile=\"{0}\"\n".format(newMozFilename))
 
     def UserSetOtherOpt(self, namelist):
-        sect = UI.UserInputList("Choose the namelist section: ", namelist.opts.keys())
+        sect = UI.user_input_list("Choose the namelist section: ", namelist.opts.keys())
         if sect is None:
             return
 
@@ -895,7 +895,7 @@ class NamelistContainer:
             return
 
         optslist = [o for o in k if o not in self.domain_opts and o not in self.date_opts]
-        opt = UI.UserInputList("Choose the option to modify: ", optslist)
+        opt = UI.user_input_list("Choose the option to modify: ", optslist)
         if opt is None:
             return
 
@@ -907,7 +907,7 @@ class NamelistContainer:
         elif opt == "gfdda_end_h":
             self.UserSetFDDAEnd()
         else:
-            optval = UI.UserInputValue(opt, isbool=namelist.IsOptBool(sect, opt), currval=namelist.GetOptValNoSect(opt, 1))
+            optval = UI.user_input_value(opt, isbool=namelist.IsOptBool(sect, opt), currval=namelist.GetOptValNoSect(opt, 1))
 
             if optval is not None:
                 namelist.SetOptVal(sect, opt, optval)
@@ -915,7 +915,7 @@ class NamelistContainer:
     def DisplayOptions(self, namelist):
         sectnames = namelist.opts.keys()
         sectnames.append("All")
-        sect = UI.UserInputList("Which namelist section to display?", sectnames)
+        sect = UI.user_input_list("Which namelist section to display?", sectnames)
         if sect == "All":
             for s in namelist.opts.keys():
                 msg_print("{0}:".format(s))
@@ -932,7 +932,7 @@ class NamelistContainer:
         # Check map proj
         curr_proj = self.wps_namelist.GetOptValNoSect("map_proj",1)
         if curr_proj not in ["'lambert'", "lambert", "'polar'", "polar"]:
-            if UI.UserInputYN("map_proj must be 'lambert' or 'polar' for NEI emissions. Change it?"):
+            if UI.user_input_yn("map_proj must be 'lambert' or 'polar' for NEI emissions. Change it?"):
                 self.UserSetMapProj(neionly=True)
 
         wps_expect_opt = ["stand_lon", "ref_lon", "ref_lat", "truelat1", "truelat2", "dx", "dy"]
@@ -963,7 +963,7 @@ class NamelistContainer:
         ref_lon = float(self.wps_namelist.GetOptValNoSect("ref_lon",1))
         if stand_lon != ref_lon:
             msg_print("NEI expects stand_lon ({0}) to be the same as ref_lon {1}".format(stand_lon, ref_lon))
-            if UI.UserInputYN("Make stand_lon the same as ref_lon? "):
+            if UI.user_input_yn("Make stand_lon the same as ref_lon? "):
                 self.wps_namelist.SetOptValNoSect("stand_lon", ref_lon)
 
         ref_lat = float(self.wps_namelist.GetOptValNoSect("ref_lat", 1))
@@ -972,7 +972,7 @@ class NamelistContainer:
         if truelat1 != ref_lat or truelat2 != ref_lat:
             msg_print("NEI gridding should be able to accept truelats different from ref_lat, but I have not tested it.")
             msg_print("(currently ref_lat = {0}, truelat1 = {1}, truelat2 = {2}".format(ref_lat, truelat1, truelat2))
-            if UI.UserInputYN("Make the truelats the same as ref_lat?"):
+            if UI.user_input_yn("Make the truelats the same as ref_lat?"):
                 self.wps_namelist.SetOptValNoSect("truelat1", ref_lat)
                 self.wps_namelist.SetOptValNoSect("truelat2", ref_lat)
 
@@ -980,8 +980,8 @@ class NamelistContainer:
         dy = int(self.wps_namelist.GetOptValNoSect("dy", 1))
         if dx < 10000:
             msg_print("NEI regridding is very simple and may behave strangely for dx < 10000 m")
-            if UI.UserInputYN("Change it?"):
-                optval = UI.UserInputValue("dx", currval=dx)
+            if UI.user_input_yn("Change it?"):
+                optval = UI.user_input_value("dx", currval=dx)
                 if optval is not None:
                     self.wps_namelist.SetOptValNoSect("dx", optval)
                     self.wps_namelist.SetOptValNoSect("dy", optval)
@@ -991,31 +991,31 @@ class NamelistContainer:
         dy = int(self.wps_namelist.GetOptValNoSect("dy", 1))
         if dx != dy:
             msg_print("NEI expects dx == dy ({0} != {1})".format(dx, dy))
-            if UI.UserInputYN("Make dy the same as dx?"):
+            if UI.user_input_yn("Make dy the same as dx?"):
                 self.wps_namelist.SetOptValNoSect("dy", dx)
 
         ioform5 = int(self.wrf_namelist.GetOptValNoSect("io_form_auxinput5",1))
         if ioform5 != 2 and ioform5 != 11:
             msg_print("io_form_auxinput5 should be 2 or 11 to use NEI, (currently {0})".format(ioform5))
-            if UI.UserInputYN("Set it to 2?"):
+            if UI.user_input_yn("Set it to 2?"):
                 self.wrf_namelist.SetOptValNoSect("io_form_auxinput5",2)
 
         iostyleemis = int(self.wrf_namelist.GetOptValNoSect("io_style_emissions",1))
         if iostyleemis != 1:
             msg_print("NEI expects io_style_emissions = 1 (currently {0})".format(iostyleemis))
-            if UI.UserInputYN("Set it to 1?"):
+            if UI.user_input_yn("Set it to 1?"):
                 self.wrf_namelist.SetOptValNoSect("io_style_emissions", 1)
 
         emissinpt = int(self.wrf_namelist.GetOptValNoSect("emiss_inpt_opt",1))
         if emissinpt != 1:
             msg_print("NEI expects emiss_inpt_opt = 1 (currently {0})".format(iostyleemis))
-            if UI.UserInputYN("Set it to 1?"):
+            if UI.user_input_yn("Set it to 1?"):
                 self.wrf_namelist.SetOptValNoSect("emiss_inpt_opt", 1)
 
         kemit = int(self.wrf_namelist.GetOptValNoSect("kemit", 1))
         if kemit != 19:
             msg_print("NEI has 19 emission levels. kemit is currently {0}".format(kemit))
-            if UI.UserInputYN("Set kemit to 19?"):
+            if UI.user_input_yn("Set kemit to 19?"):
                 self.wrf_namelist.SetOptValNoSect("kemit", 19)
 
     def CmdSetOtherOpt(self, optname, optval, forceWrfOnly=False):
@@ -1051,7 +1051,7 @@ class NamelistContainer:
         opts = ["Start/end date", "Domain (common opts only)", "Meterology", "Chemistry", "Other WRF options",
                 "Other WPS options", "Check for NEI compatibility", "Select MOZBC file", "Display WRF options",
                 "Display WPS options", "Save and exit"]
-        sel = UI.UserInputList(prmpt, opts, returntype="index", emptycancel=False)
+        sel = UI.user_input_list(prmpt, opts, returntype="index", emptycancel=False)
         if sel == 0:
             self.UserSetTimePeriod()
         elif sel == 1:
@@ -1083,7 +1083,7 @@ class UI:
         pass
 
     @staticmethod
-    def UserInputList( prompt, options, returntype="value", currentvalue=None, emptycancel=True):
+    def user_input_list(prompt, options, returntype="value", currentvalue=None, emptycancel=True):
         # Method will give the user their list of options, sequentially numbered, and ask them to chose one. It will
         # ensure that the selection is in the permissible range and return, by default, the value selected. The keyword
         # argument "returntype" can be set to "index" to have this function return the index within the list options
@@ -1131,7 +1131,7 @@ class UI:
             raise ValueError("Value '{0}' for keyword 'returntype' is not recognized".format(returntype))
 
     @staticmethod
-    def UserInputDate( prompt, currentvalue=None):
+    def user_input_date(prompt, currentvalue=None):
         # Prompts the user for a date in yyyy-mm-dd or yyyy-mm-dd HH:MM:SS format. Only input is a prompt describing
         # what the date is. Returns a datetime object. The currentvalue keyword can be used to display the current
         # setting, but it must be a datetime object as well. Returns none if user ever enters an empty string.
@@ -1196,7 +1196,7 @@ class UI:
             return dateout
 
     @staticmethod
-    def UserInputValue( optname, isbool=False, currval=None, noempty=False):
+    def user_input_value(optname, isbool=False, currval=None, noempty=False):
         # Allows user to input a value simply. The isbool keyword input allows this function to behave differently if
         # the option is a boolean, since those options must be given as .true. or .false.
         # As with others, a value for currval will print the current value
@@ -1226,7 +1226,7 @@ class UI:
                     return userans
 
     @staticmethod
-    def UserInputYN(prompt, default="y"):
+    def user_input_yn(prompt, default="y"):
         while True:
             if default in "Yy":
                 defstr = " [y]/n"
