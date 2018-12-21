@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+from __future__ import print_function, absolute_import, division, unicode_literals
+
 from glob import glob
 import os
 from pkg_resources import parse_version

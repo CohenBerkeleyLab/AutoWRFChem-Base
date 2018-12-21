@@ -88,5 +88,6 @@ def entry_point():
     exec_func = args.pop('exec_func')
     exec_func(**args)
 
+
 if __name__ == '__main__':
     entry_point()

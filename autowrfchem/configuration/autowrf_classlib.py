@@ -1,20 +1,44 @@
-from __future__ import print_function
-import datetime as dt
-import math
+from __future__ import print_function, absolute_import, division, unicode_literals
+
 from collections import OrderedDict
-import pickle
-import os
+import datetime as dt
 from glob import glob
+import math
+import os
+import pickle
+import re
+
 import pdb
-import autowrf_consts as awc
+from . import autowrf_consts as awc
+
+# Python 2/3 compatibility: "input()" in Python 3 is like "raw_input()" in Python 2
+try:
+    input = raw_input
+except NameError:
+    pass
 
 DEBUG_LEVEL=1
+
+
+class NamelistFormatError(Exception):
+    """
+    Exception to use when there is an issue formatting inputs to the namelist
+    """
+    pass
+
+
+class RegistryParsingError(Exception):
+    """
+    Exception to use when there is a problem parsing a registry file
+    """
+
 
 def msg_print(msg):
     if DEBUG_LEVEL > 0:
         print(msg)
 
-class Namelist:
+
+class Namelist(object):
     # These are used to format the output so that the domains are aligned
     opt_field_width = 36
     opt_val_width = 8
@@ -64,9 +88,9 @@ class Namelist:
 
     def WriteNamelist(self, out_filename):
         with open(out_filename, 'w') as f:
-            for sect, optlist in self.opts.iteritems():
+            for sect, optlist in self.opts.items():
                 f.write("&"+sect+"\n")
-                for optname, optvals in optlist.iteritems():
+                for optname, optvals in optlist.items():
                     padding = " " * (self.opt_field_width - len(optname) - 1)
                     f.write(" "+optname+padding+"= ")
                     for val in optvals:
@@ -140,14 +164,23 @@ class Namelist:
 
         vals = self.MatchOptionQuoting(sectname, optname, vals)
 
+        # we'll make sure that we set the right number of options for the maximum number of domains
+        n_domains = int(self.GetOptValNoSect('max_dom')[0])
+
         if type(vals) is list:
+            if len(vals) < n_domains:
+                raise NamelistFormatError('Too few values given for "{opt}" in "{sect}". {n} values given; '
+                                          '{n_dom} domains requested.'.format(opt=optname, sect=sectname, n=len(vals),
+                                                                              n_dom=n_domains))
+
             self.opts[sectname][optname] = vals
         else:
+            vals = [vals] * n_domains
             if type(self.opts[sectname][optname]) is list:
                 for i in range(len(self.opts[sectname][optname])):
                     self.opts[sectname][optname][i] = vals
             else:
-                self.opts[sectname][optname]
+                raise NotImplementedError('Option value stored in the namelist is not a list!')
 
     def MatchOptionQuoting(self, sectname, optname, new_vals):
         # Make sure that, if the previous value of the option is quoted, that the new value is as well
@@ -444,7 +477,7 @@ class WpsNamelist(Namelist):
                 msg_print("geogrid options have changed with the map projection.")
                 msg_print("The NEI compatibility checker will help you set them.")
 
-            junk = raw_input("Press ENTER to continue.")
+            junk = input("Press ENTER to continue.")
 
 
 class NamelistContainer:
@@ -850,7 +883,7 @@ class NamelistContainer:
             msg_print("This must be created and contain your MOZBC files. Both")
             msg_print("this program and the MOZBC component of the automatic WRF")
             msg_print("program rely on this.")
-            raw_input("Press ENTER to continue")
+            input("Press ENTER to continue")
             return None
 
         tmp = glob(os.path.join(mozDataDir, "*.nc"))
@@ -859,7 +892,7 @@ class NamelistContainer:
             msg_print("No MOZBC data files present! You need to download some.")
             msg_print("As of 20 Jul 2016, they can be obtained at")
             msg_print("http://www.acom.ucar.edu/wrf-chem/mozart.shtml")
-            raw_input("Press ENTER to continue")
+            input("Press ENTER to continue")
             return None
 
         newMozFilename = UI.user_input_list("Choose the MOZBC file to use: ", mozFiles, currentvalue=mozFilename)
@@ -870,7 +903,7 @@ class NamelistContainer:
             msg_print("the input preparation step. Rerunning 'autowrfchem config namelist'")
             msg_print("and modifying the current namelist will allow you to select a file")
             msg_print("later.")
-            raw_input("Press ENTER to continue")
+            input("Press ENTER to continue")
             return None
         
         wroteMoz=False
@@ -1077,7 +1110,233 @@ class NamelistContainer:
 
         return True
   
-    
+
+class Registry(object):
+    """
+    Parse and represent the WRF registry
+
+    The entries in the registry will be stored in the `registry` attribute as a dictionary, where each key is an entry
+    type e.g. 'state', 'rconfig' etc. Each value will be another dictionary storing the individual entries by name.
+
+    :param registry_file: the top registry file to read. Any subfiles `include`d will be read as well.
+    :type registry_file: str
+
+    :param envvar_config: the configuration object that stores the environmental variables used when compiling WRF.
+     This is needed to choose which parts of the registry to include/not include since some parts are disabled based
+     on the core chosen or other configuration options for the model.
+
+    :param entry_types: a tuple of strings that will be used to filter what entries in the registry should be included.
+     Examples are 'state', 'rconfig', i.e. the first value on a registry line. Default is just `('rconfig',)`.
+    :type entry_types: tuple of str
+    """
+
+    @property
+    def registry(self):
+        """
+        A dictionary representation of the WRF registry
+        :return:
+        """
+        return self._registry
+
+    # WRF registry description:
+    # http://www2.mmm.ucar.edu/wrf/users/tutorial/201201/WRF%20Registry%20and%20Examples.ppt.pdf
+    def __init__(self, registry_file, envvar_config, entry_types=('rconfig',)):
+        """
+        See class help.
+        """
+        # used to keep track of the include stack of registry files in case we need to print a warning/error message
+        self._file_stack = []
+
+        self._envvar_config = envvar_config
+        self._entry_types = entry_types
+        self._registry = self._parse_reg_file(registry_file)
+
+    def _parse_reg_file(self, reg_file):
+        """
+        Parse a single registry file.
+
+        :param reg_file: the registry file to parse
+        :type reg_file: str
+
+        :return: the registry dictionary.
+        :rtype: dict
+        """
+        def check_envvar(vardef):
+            varname, state = vardef.split('=')
+            # TODO: actually check state.
+            #  if state is '1', then we need to check that the variable is in the config and set to 1. If '0' then need
+            #  to check that it is either missing from the config or in the config and set to 0.
+            return False
+
+        reg_dict = {k: dict() for k in self._entry_types}
+
+        with open(reg_file, 'r') as rfile:
+            # opened a new registry file: add it to the stack. allows recursive calls to this function to keep track
+            # of the chain of include directives followed to get to this file.
+            self._file_stack.append([0, reg_file])
+            skipping = False
+
+            for line in rfile:
+                # increment current line number (1-based for readability)
+                self._file_stack[-1][0] += 1
+
+                # Remove comments, skip to next line if nothing left
+                line = re.sub(r'#.*', '', line).strip()
+                if len(line) == 0:
+                    continue
+
+                entry = line.split()[0].strip()
+                # The registry seems to use c-preprocessor ifdef lines to turn on or off parts of it based on e.g. which
+                # model core is active (which is why we need the environmental variable configuration). So far, "ifdef"
+                # is the only c-preprocessor directive that's used. If more get added later, we might be able to use
+                # something like PLY (https://github.com/dabeaz/ply) to call the cpp, but it might not work since the
+                # registry uses "ifdef" and not "#ifdef".
+                #
+                # For now, when we hit an "ifdef" we check if the condition is met; if not, we start skipping lines
+                # until the next "endif".
+                if not skipping and entry == 'ifdef':
+                    skipping = not check_envvar(line.split()[1])
+                elif entry == "endif":
+                    skipping = False
+                elif not skipping:
+                    # If not skipping due to env. var., then actually parse the line. If it's an include, we end up
+                    # calling this function recursively to parse the included registry file. Otherwise, if it's an entry
+                    # type that we are keeping, parse the line.
+                    if entry == 'include':
+                        self._add_reg_include(reg_dict, reg_file, line)
+                        if len(self._file_stack) == 1:
+                            print(len(reg_dict['rconfig']))
+                    elif entry in self._entry_types:
+                        if entry == 'rconfig':
+                            self._add_rconfig(reg_dict['rconfig'], line)
+                        else:
+                            # Only error if we're supposed to be parsing this entry type but don't have a method to
+                            # do so
+                            raise NotImplementedError('No method to parse a registry entry of type "{entry}"'.format(entry=entry))
+
+        self._file_stack.pop()
+        return reg_dict
+
+    def _add_reg_include(self, reg_dict, base_reg_file, line):
+        """
+        Add a registry file included in a parent file.
+
+        :param reg_dict: the registry dictionary to update with entries from the included registry.
+        :type reg_dict: dict
+
+        :param base_reg_file: the path to registry file that contained the include directive that we're following. We
+         assume that any included registry files' paths are given relative to the base file.
+        :type base_reg_file: str
+
+        :param line: the line containing the include directive.
+        :type line: str
+
+        :return: None, modifies reg_dict in place.
+        """
+        incl_file = re.search(r'(?<=include)\s+.+$', line).group()
+        incl_file = incl_file.strip()
+        incl_dir = os.path.dirname(base_reg_file)
+        new_reg_file = os.path.join(incl_dir, incl_file)
+        new_dict = self._parse_reg_file(new_reg_file)
+        if len(self._file_stack) == 1:
+            print('new:', len(new_dict['rconfig']))
+        for key, val in new_dict.items():
+            reg_dict[key].update(new_dict[key])
+
+    def _add_rconfig(self, rconfig_dict, reg_line):
+        """
+        Parse an rconfig entry in the registry and add it to the rconfig dictionary.
+
+        :param rconfig_dict: the dictionary containing all rconfig entries.
+        :type rconfig_dict: dict
+
+        :param reg_line: the line in the registry
+        :type reg_line: str
+
+        :return: None, modifies rconfig_dict in place
+        """
+
+        # The column that defines how an rconfig option is set has two possible forms:
+        #   1) "namelist,<section>" e.g. "namelist,physics"
+        #   2) "derived"
+        # In the former case, we'll likely want to readily access which namelist section an option belongs in in case we
+        # need to add it, so we split this column up into a dictionary to make that easier.
+        def parse_how_set(val):
+            val = val.split(',')
+            if len(val) == 1 and val[0] == 'derived':
+                return {'how', val[0], 'section', None}
+            elif len(val) == 2 and val[1] == 'namelist':
+                return {'how', val[0], 'section', val[1]}
+
+        # Just need to set up the parsing functions, we'll rely on _parse_reg_line to do the heavy lifting
+        names_and_parsers = [(None, None), ('type', str), ('symbol', str), ('how_set', parse_how_set),
+                             ('num_entries', str), ('default', str)]
+        self._parse_reg_line(rconfig_dict, reg_line, 2, names_and_parsers)
+
+    def _parse_reg_line(self, entry_dict, reg_line, key_ind, names_and_parsers):
+        """
+        Parse a single registry line
+
+        :param entry_dict: the dictionary containing individual entries; this will be updated in place.
+        :type entry_dict: dict
+
+        :param reg_line: the registry line to parse
+        :type reg_line: str
+
+        :param key_ind: which column to use as the key in the entry dict (0-based).
+        :type key_ind: int
+
+        :param names_and_parsers: a list of 2-element tuples where the first element is the key to use in the individual
+         entry's dictionary to hold the value in the corresponding column, and the second is a function to call on the
+         value in the column to parse it. Set both elements to ``None`` to ignore this column. An example for 'rconfig'
+         entries is::
+
+             [(None, None), ('type', str), ('symbol', str), ('how_set', parse_how_set),
+              ('num_entries', str), ('default', str)]
+
+         which will ignore the first column (which is 'rconfig') and create a dictionary with keys 'type', 'symbol',
+         'how_set', 'num_entries', and 'default'. The values for each is the function in the tuple called on the string
+         in that column, e.g. ``'type' = str(val)``.
+        :type names_and_parsers: list of (str, function) tuples
+
+        :return: None, modifies entry_dict in place.
+        """
+        reg_line = reg_line.split()
+        key = reg_line[key_ind]
+        line_dict = dict()
+        for i, (name, parser) in enumerate(names_and_parsers):
+            if name is not None:
+                line_dict[name] = parser(reg_line[i])
+
+        if key in entry_dict:
+            # If a registry entry shows up more than once, we only care about the first instance. I'm basing this on
+            # registry.io_boilerplate for WRF v3.9.1.1. In it, it defines 'auxinput1_inname' and 'io_form_auxinput1'
+            # before it includes io_boilerplate_temporary.inc. The comments say that the above rconfig opts override
+            # those in io_boilerplate_temporary.inc, hence I assume that the first occurrence of an entry is the one
+            # that gets used.
+            msg_print('Entry already exists in registry dictionary: "{key}" {stack}'.format(key=key,
+                                                                                            stack=self._format_file_stack()))
+        else:
+            entry_dict[key] = line_dict
+
+    def _format_file_stack(self):
+        """
+        Create a message describing the current stack of registry files being read.
+
+        This is useful for errors when parsing a registry file that may be several ``include``s deep so that the
+        error message can reflect exactly the path through the registry that the parser took.
+
+        :return: the message
+        :rtype: str
+        """
+
+        # print from the file in backwards
+        msg = "in {file} at line {line_no}".format(file=self._file_stack[-1][1], line_no=self._file_stack[-1][0])
+        for level in reversed(self._file_stack[:-1]):
+            msg += ",\n  included at line {line_no} in {file}".format(line_no=level[0], file=level[1])
+        return msg
+
+
 class UI:
     def __init__(self):
         pass
@@ -1111,7 +1370,7 @@ class UI:
             print("  {2}{0}: {1}".format(i, options[i-1], currstr))
 
         while True:
-            userans = raw_input("Enter 1-{0}: ".format(len(options)))
+            userans = input("Enter 1-{0}: ".format(len(options)))
             if len(userans) == 0:
                 return None
 
@@ -1146,7 +1405,7 @@ class UI:
             print("Current value is {0}".format(currentvalue))
 
         while True:
-            userdate = raw_input("--> ")
+            userdate = input("--> ")
             userdate = userdate.strip()
             if len(userdate) == 0:
                 return None
@@ -1188,7 +1447,7 @@ class UI:
             # Take advantage of datetime's built in checking to be sure we have a valid date
             try:
                 dateout = dt.datetime(yr,mn,dy,hour,min,sec)
-            except ValueError, e:
+            except ValueError as e:
                 print("Problem with date/time entered: {0}".format(str(e)))
                 continue
 
@@ -1207,7 +1466,7 @@ class UI:
 
         while True:
             if isbool:
-                userans = raw_input("T/F: ").lower().strip()
+                userans = input("T/F: ").lower().strip()
                 if userans == "t":
                     return ".true."
                 elif userans == "f":
@@ -1217,7 +1476,7 @@ class UI:
                 else:
                     print("Option is a boolean. Must enter T or F.")
             else:
-                userans = raw_input("--> ").strip()
+                userans = input("--> ").strip()
                 if len(userans) == 0 and not noempty:
                     return None
                 elif len(userans) == 0 and noempty:
@@ -1234,7 +1493,7 @@ class UI:
             else:
                 defstr = " y/[n]"
                 defaultans = False
-            userans = raw_input(prompt + defstr + ": ")
+            userans = input(prompt + defstr + ": ")
 
             if userans == "":
                 return defaultans
