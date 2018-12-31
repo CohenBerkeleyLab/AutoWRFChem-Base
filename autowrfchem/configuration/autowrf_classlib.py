@@ -19,7 +19,7 @@ except NameError:
 
 #TODO: check number of domains when loading WRF namelist
 #TODO: figure out domains for WPS namelist
-#TODO: figure out why bldt, cudt, icloud, nio_tasks_per_group, and nio_groups not in registry
+#TODO: figure out why nio_tasks_per_group, and nio_groups not in registry
 
 
 DEBUG_LEVEL = 1
@@ -276,23 +276,29 @@ class Namelist(object):
 
 
 class WrfNamelist(Namelist):
+
+    # Define extra
+
+    # Define additional callback functions in this section, then add them to the following callbacks attribute
     def UpdateOptDomains(self, trim_extra=False):
         n_dom = self.max_domains
-        rconfigs = self._registry.registry['rconfig']
         for optval, optname, _ in self.IterOpts():
-            if optname not in rconfigs:
+            try:
+                reg_opt = self._registry.lookup_reg_entry('rconfig', optname)
+            except KeyError:
                 print('{} not in registry!'.format(optname))
-            elif rconfigs[optname]['num_entries'] == 'max_domains':
-                if len(optval) < n_dom:
-                    self.SetOptValNoSect(optname, optval + optval[-1:] * (n_dom - len(optval)))
-                elif len(optval) > n_dom and trim_extra:
-                    self.SetOptValNoSect(optname, optval[:n_dom])
+            else:
+                if reg_opt['num_entries'] == 'max_domains':
+                    if len(optval) < n_dom:
+                        self.SetOptValNoSect(optname, optval + optval[-1:] * (n_dom - len(optval)))
+                    elif len(optval) > n_dom and trim_extra:
+                        self.SetOptValNoSect(optname, optval[:n_dom])
 
+    # This must come after the callback functions are defined.
     callbacks = {'max_dom': UpdateOptDomains}
 
     def __init__(self, namelist_file, registry):
         Namelist.__init__(self, namelist_file, registry)
-        #pdb.set_trace()
         # Is gfdda_end_h an option in the namelist? If not, we don't need to see if it should be updated with the run
         # time
         self.update_fdda_end = False
