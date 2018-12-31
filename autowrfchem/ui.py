@@ -111,7 +111,7 @@ def user_input_date(prompt, currentvalue=None):
         # Take advantage of datetime's built in checking to be sure we have a valid date
         try:
             dateout = dt.datetime(yr,mn,dy,hour,min,sec)
-        except ValueError, e:
+        except ValueError as e:
             print("Problem with date/time entered: {0}".format(str(e)))
             continue
 

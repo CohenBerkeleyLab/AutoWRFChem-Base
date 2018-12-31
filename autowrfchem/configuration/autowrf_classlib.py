@@ -17,8 +17,12 @@ try:
 except NameError:
     pass
 
-DEBUG_LEVEL=1
+#TODO: check number of domains when loading WRF namelist
+#TODO: figure out domains for WPS namelist
+#TODO: figure out why bldt, cudt, icloud, nio_tasks_per_group, and nio_groups not in registry
 
+
+DEBUG_LEVEL = 1
 
 class NamelistFormatError(Exception):
     """
@@ -53,9 +57,23 @@ class Namelist(object):
     # SetMetOpts for each child namelist
     mets = ["NARR"]
 
-    def __init__(self, namelist_file):
+    # functions that will be called whenever an option (given by the key) is set. The function will receive the namelist
+    # instance as the only argument
+    callbacks = dict()
+
+    @property
+    def max_domains(self):
+        return int(self.GetOptValNoSect('max_dom')[0])
+
+    def __init__(self, namelist_file, registry):
+        self._registry = registry
         self.opts = OrderedDict()
         self.ReadNamelist(namelist_file)
+
+    def IterOpts(self):
+        for sect_name, sect_dict in self.opts.items():
+            for opt_name, opt_val in sect_dict.items():
+                yield opt_val, opt_name, sect_name
 
     def ReadNamelist(self, namelist_file):
         sectname=""
@@ -165,7 +183,7 @@ class Namelist(object):
         vals = self.MatchOptionQuoting(sectname, optname, vals)
 
         # we'll make sure that we set the right number of options for the maximum number of domains
-        n_domains = int(self.GetOptValNoSect('max_dom')[0])
+        n_domains = self.max_domains
 
         if type(vals) is list:
             if len(vals) < n_domains:
@@ -177,10 +195,12 @@ class Namelist(object):
         else:
             vals = [vals] * n_domains
             if type(self.opts[sectname][optname]) is list:
-                for i in range(len(self.opts[sectname][optname])):
-                    self.opts[sectname][optname][i] = vals
+                self.opts[sectname][optname] = vals
             else:
                 raise NotImplementedError('Option value stored in the namelist is not a list!')
+
+        if optname in self.callbacks:
+            self.callbacks[optname](self)
 
     def MatchOptionQuoting(self, sectname, optname, new_vals):
         # Make sure that, if the previous value of the option is quoted, that the new value is as well
@@ -256,8 +276,22 @@ class Namelist(object):
 
 
 class WrfNamelist(Namelist):
-    def __init__(self, namelist_file):
-        Namelist.__init__(self, namelist_file)
+    def UpdateOptDomains(self, trim_extra=False):
+        n_dom = self.max_domains
+        rconfigs = self._registry.registry['rconfig']
+        for optval, optname, _ in self.IterOpts():
+            if optname not in rconfigs:
+                print('{} not in registry!'.format(optname))
+            elif rconfigs[optname]['num_entries'] == 'max_domains':
+                if len(optval) < n_dom:
+                    self.SetOptValNoSect(optname, optval + optval[-1:] * (n_dom - len(optval)))
+                elif len(optval) > n_dom and trim_extra:
+                    self.SetOptValNoSect(optname, optval[:n_dom])
+
+    callbacks = {'max_dom': UpdateOptDomains}
+
+    def __init__(self, namelist_file, registry):
+        Namelist.__init__(self, namelist_file, registry)
         #pdb.set_trace()
         # Is gfdda_end_h an option in the namelist? If not, we don't need to see if it should be updated with the run
         # time
@@ -1204,8 +1238,6 @@ class Registry(object):
                     # type that we are keeping, parse the line.
                     if entry == 'include':
                         self._add_reg_include(reg_dict, reg_file, line)
-                        if len(self._file_stack) == 1:
-                            print(len(reg_dict['rconfig']))
                     elif entry in self._entry_types:
                         if entry == 'rconfig':
                             self._add_rconfig(reg_dict['rconfig'], line)
@@ -1238,8 +1270,6 @@ class Registry(object):
         incl_dir = os.path.dirname(base_reg_file)
         new_reg_file = os.path.join(incl_dir, incl_file)
         new_dict = self._parse_reg_file(new_reg_file)
-        if len(self._file_stack) == 1:
-            print('new:', len(new_dict['rconfig']))
         for key, val in new_dict.items():
             reg_dict[key].update(new_dict[key])
 
@@ -1335,6 +1365,74 @@ class Registry(object):
         for level in reversed(self._file_stack[:-1]):
             msg += ",\n  included at line {line_no} in {file}".format(line_no=level[0], file=level[1])
         return msg
+
+    def lookup_reg_entry(self, entry_type, entry_name, match_case=False):
+        """
+        Return a given entry.
+
+        :param entry_type: The type of entry (e.g. "state", "rconfig") to get.
+        :type entry_type: str
+
+        :param entry_name: The specific entry to get.
+        :type entry_name: str
+
+        :param match_case: optional, specifies whether the entry_name should match the letter case of the stored
+         entry_names. Default is False, i.e. matching will be case-insensitive.
+        :type match_case: bool
+
+        :return: the dictionary representing the registry entry
+        :rtype: dict
+
+        :raises KeyError: if cannot find a unique entry with name ``entry_name``
+        """
+
+        if not match_case:
+            return self._find_entry_case_insensitive(entry_type, entry_name)
+        else:
+            type_dict = self.registry[entry_type]
+            return type_dict[entry_name]
+
+    def _find_entry_case_insensitive(self, reg_type, entry_name, error_if_multiple=True):
+        """
+        Find a registry entry ignoring case of both the type and name
+
+        :param reg_type: the registry entry type (e.g. "state", "rconfig").
+        :type reg_type: str
+
+        :param entry_name: the name of the registry entry to search for
+        :type entry_name: str
+
+        :param error_if_multiple: optional, controls what happens if multiple entries match the given entry name. If
+         ``True`` (default), a `KeyError` will be raised if more than one entry matching the ``reg_type`` and
+         ``entry_name`` are found. If ``False``, a list of matching entries is returned.
+        :type error_if_multiple: bool
+
+        :return: a single entry dictionary if ``error_if_multiple`` is ``True``, a list of such dicts if it is ``False``
+        :rtype: dict or list of dicts
+
+        :raises KeyError: if no matching entry is found, or if >1 found and ``error_if_multiple`` is ``True``.
+        """
+        def find_key_case_insensitive(dict_in, dict_key):
+            keys = []
+            for key, val in dict_in.items():
+                if key.lower() == dict_key.lower():
+                    keys.append(val)
+            return keys
+
+        entry_type_dicts = find_key_case_insensitive(self.registry, reg_type)
+        entries = []
+        for etype_dict in entry_type_dicts:
+            entries += find_key_case_insensitive(etype_dict, entry_name)
+
+        if error_if_multiple and len(entries) > 1:
+            raise KeyError('Multiple entries found matching "{}/{}" (case insensitive)'.format(reg_type, entry_name))
+        elif len(entries) < 1:
+            raise KeyError('Entry "{}/{}" not found'.format(reg_type, entry_name))
+
+        if error_if_multiple:
+            return entries[0]
+        else:
+            return entries
 
 
 class UI:

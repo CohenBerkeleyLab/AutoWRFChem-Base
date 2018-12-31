@@ -1,0 +1,38 @@
+&share
+ wrf_core = 'ARW',
+ max_dom = 1,
+ start_date = '2013-05-27_00:00:00','2013-05-27_00:00:00',
+ end_date   = '2013-06-03_00:00:00','2013-06-03_00:00:00',
+ interval_seconds = 10800
+ io_form_geogrid = 2,
+/
+
+&geogrid
+ parent_id         =   1,   1,
+ parent_grid_ratio =   1,   3,
+ i_parent_start    =   1,  31,
+ j_parent_start    =   1,  17,
+ e_we              =  74, 112,
+ e_sn              =  61,  91,
+ geog_data_res     = '10m','2m',
+ dx = 30000,
+ dy = 30000,
+ map_proj = 'lambert',
+ ref_lat   =  34.83,
+ ref_lon   = -81.03,
+ truelat1  =  34.83,
+ truelat2  =  34.83,
+ stand_lon = -81.03,
+ geog_data_path = '/global/scratch/laughner/WRF-All/WPS_GEOG_ALL/'
+/
+
+&ungrib
+ out_format = 'WPS',
+ prefix = 'FILE',
+/
+
+&metgrid
+ fg_name = 'FILE'
+ io_form_metgrid = 2, 
+ constants_name = '/global/home/groups/co_aiolos/cohen/WPS_FIXED/NARRfixed.wps'
+/
