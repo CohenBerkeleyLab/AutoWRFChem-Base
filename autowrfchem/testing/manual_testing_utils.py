@@ -6,7 +6,7 @@ from . import testing_input_dir, testing_namelist_dir
 
 def get_envvar_config():
     env_cfg_file = os.path.join(testing_input_dir, 'autowrfchem_testing.cfg')
-    return config_utils.AutoWRFChemConfig.load_config(env_cfg_file)
+    return config_utils.AutoWRFChemConfig(env_cfg_file)
 
 
 def get_registry():

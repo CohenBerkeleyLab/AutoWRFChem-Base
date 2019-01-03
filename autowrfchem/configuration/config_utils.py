@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import print_function, absolute_import, division, unicode_literals
 
+from configobj import ConfigObj
 from glob import glob
 import os
 from pkg_resources import parse_version
@@ -9,15 +10,16 @@ import re
 from .. import automation_top_dir
 from . import AUTOMATION, WRF_TOP_DIR, WPS_TOP_DIR
 
-try:
-    # Python 3 names it with lower case and Python 2 has a backported version named lowercase
-    import configparser as conpar
-except ImportError:
-    # Only if we can't find the newer version do we fall back on the Python 2.x version
-    import ConfigParser as conpar
 
 from .. import _config_dir, _config_defaults_dir, ui
 from . import ConfigurationError
+
+
+class ConfigurationLoadError(ConfigurationError):
+    """
+    Error to use if there's an error loading the config file
+    """
+    pass
 
 
 class ComponentMissingError(Exception):
@@ -27,7 +29,7 @@ class ComponentMissingError(Exception):
     pass
 
 
-class AutoWRFChemConfig(conpar.ConfigParser):
+class AutoWRFChemConfig(ConfigObj):
     """
     Class that represents the configuration (except for the namelists) of the AutoWRFChem package
 
@@ -38,72 +40,52 @@ class AutoWRFChemConfig(conpar.ConfigParser):
     _config_file = os.path.join(_config_dir, 'autowrfchem.cfg')
     _default_config_file = os.path.join(_config_defaults_dir, 'autowrfchem_default.cfg')
 
-    @property
-    def source_file(self):
-        return self._source_file
+    # used to replace the initial comment in the defaults file
+    _std_initial_comment = ['# This is the configuration file for AutoWRFChem.',
+                            '# You may modify settings here if desired, so long as the format is maintained.',
+                            '# Each section must be defined with the title in square brackets.',
+                            '# Each option must begin at the start of the line (no leading whitespace) and be',
+                            '# separated from the value with an =.']
 
     @property
     def read_from_defaults(self):
         return self._read_from_defaults
 
-    def __init__(self, *args, **kwargs):
-        super(AutoWRFChemConfig, self).__init__(*args, **kwargs)
-        self._source_file = None
-        self._read_from_defaults = False
+    def __init__(self, config_file=None, reload_defaults=True, *args, **kwargs):
+        config_file = self._choose_config_file(config_file, reload_defaults=reload_defaults)
+        super(AutoWRFChemConfig, self).__init__(config_file, *args, **kwargs)
 
-    def optionxform(self, optionstr):
-        # Keep options case sensitive
-        return str(optionstr)
+        # ConfigObj uses the filename attribute to determine where to write the file by default. We never want to
+        # overwrite the defaults file, so if that's where we read from, we instead want to by default write to the
+        # standard config location. Further, we also want to swap out the initial comment from one that says "do not
+        # modify the defaults" to one that says "it's okay to modify this file"
+        if config_file != self._default_config_file:
+            self.filename = config_file
+        else:
+            self.filename = self._config_file
+            self.initial_comment = self._std_initial_comment
+        self._read_from_defaults = config_file == self._default_config_file
 
     @classmethod
-    def load_config(cls, config_file=None, reload_defaults=False):
-        """
-        Read in the AutoWRFChem configuration file.
-
-        :param config_file: optional, the path to a configuration file to load. If not given, this method will first
-        look for the standard config file at AutoWRFChem-Base/CONFIG/autowrfchem.cfg, then if that does not exist, the
-        defaults file at AutoWRFChem-BASE/CONFIG/Defaults/autowrfchem_default.cfg
-        :return: a new instance of AutoWRFChemConfig with the options loaded. The
-        """
-        config = cls()
-
-        # TODO: decide if the options in the loaded file should be checked against the default one to be sure they are all there?
-        if not reload_defaults and config_file is not None:
-            if not os.path.isfile(config_file):
-                raise IOError('Custom config file ({}) does not exist'.format(config_file))
+    def _choose_config_file(cls, config_file, reload_defaults=True):
+        def get_std_configs():
+            if os.path.isfile(cls._config_file):
+                return cls._config_file
+            elif reload_defaults:
+                if os.path.isfile(cls._default_config_file):
+                    return cls._default_config_file
+                else:
+                    raise ConfigurationLoadError('The default configuration file does not exist! '
+                                                 'Restore it from the git repo if necessary.')
             else:
-                config_file_to_load = config_file
-        elif not reload_defaults and os.path.isfile(cls._config_file):
-            config_file_to_load = cls._config_file
-        elif os.path.isfile(cls._default_config_file):
-            config_file_to_load = cls._default_config_file
-            config._read_from_defaults = True
+                raise ConfigurationLoadError('Not permitted to reload defaults, but the standard config file does not exist.')
+
+        if config_file is None:
+            return get_std_configs()
+        elif os.path.isfile(config_file):
+            return config_file
         else:
-            raise ConfigurationError('No configuration file exists (including the default file)')
-
-        config.read(config_file_to_load)
-        config._source_file = config_file_to_load
-
-        return config
-
-    def save_config(self, config_file=_config_file):
-        """
-        Save the configuration.
-        :param config_file: optional, if given, overrides the standard save location, which is AutoWRFChem-Base/CONFIG/
-        autowrfchem.cfg
-        :return: none.
-        """
-
-        header = \
-"""# This is the configuration file for AutoWRFChem.
-# You may modify settings here if desired, so long as the format is maintained.
-# Each section must be defined with the title in square brackets.
-# Each option must begin at the start of the line (no leading whitespace) and be
-# separated from the value with an =."""
-
-        with open(config_file, 'w') as fobj:
-            fobj.write(header + '\n\n')
-            self.write(fobj)
+            raise ConfigurationLoadError('Given custom config file ({}) does not exist!'.format(config_file))
 
 
 def get_envvar_presets(preset=None):
@@ -247,7 +229,7 @@ def _make_component_top_dir(component_var, config_obj=None):
     if config_obj is None:
         config_obj = AutoWRFChemConfig()
 
-    component_dir = config_obj.get(AUTOMATION, component_var)
+    component_dir = config_obj[AUTOMATION][component_var]
     if not os.path.isabs(component_dir):
         component_dir = os.path.abspath(os.path.join(automation_top_dir, component_dir))
 
