@@ -5,19 +5,11 @@ import os
 #######################################
 
 _pkg_dir = os.path.abspath(os.path.dirname(__file__))
+automation_top_dir = os.path.abspath(os.path.join(_pkg_dir, '..'))
+
 _config_dir = os.path.abspath(os.path.join(_pkg_dir, '..', 'CONFIG'))
+_config_defaults_dir = os.path.join(_config_dir, 'Defaults')
 _wrf_dir_default = os.path.abspath(os.path.join(_pkg_dir, '..', 'WRFV3'))
-
-
-def get_wrf_dir():
-    """
-    Get the top level WRF directory (usually WRFV3).
-    :return: absolute path to the WRF directory as a string
-    """
-
-    # Eventually this should query a configuration file so that a different WRF directory
-    # can be set
-    return _wrf_dir_default
 
 
 ##############

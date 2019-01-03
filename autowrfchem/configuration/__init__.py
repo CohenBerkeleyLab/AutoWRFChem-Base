@@ -1,4 +1,7 @@
 ENVIRONMENT = 'ENVIRONMENT'
+AUTOMATION = 'AUTOMATION'
+WRF_TOP_DIR = 'WRF_TOP_DIR'
+WPS_TOP_DIR = 'WPS_TOP_DIR'
 
 class ConfigurationError(Exception):
     pass

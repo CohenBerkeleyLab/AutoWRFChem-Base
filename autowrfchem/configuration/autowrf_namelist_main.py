@@ -2,8 +2,11 @@ from __future__ import print_function
 import sys
 import os
 import datetime as dt
-import autowrf_classlib as WRF
-from autowrf_classlib import UI
+
+from . import AUTOMATION
+from . import config_utils
+from . import autowrf_classlib as WRF
+from .autowrf_classlib import UI
 import pdb
 
 def MyPath():
@@ -108,13 +111,10 @@ def SaveMenu(nlc):
             "Do not save"]
     sel = UI.user_input_list("Save the namelists?", opts, returntype="index")
 
-    my_dir = os.path.dirname(__file__)
-
     if sel == 0:
-        nlc.WriteNamelists(dir=my_dir)
-        nlc.SavePickle()
+        nlc.SaveNamelists('both')
     elif sel == 1:
-        nlc.WriteNamelists(dir=my_dir)
+        nlc.SaveNamelists('temporary')
     elif sel == 2:
         while True:
             suffix = UI.user_input_value("suffix", noempty=True)
@@ -124,13 +124,12 @@ def SaveMenu(nlc):
             else:
                 break
 
-        nlc.WriteNamelists(dir=NamelistsPath(), suffix=suffix)
+        nlc.WriteNamelists(namelist_dir=NamelistsPath(), suffix=suffix)
 
-        userans = raw_input("Do you also write to make these the current namelist? y/[n]: ")
+        userans = input("Do you also write to make these the current namelist? y/[n]: ")
         if userans.lower() == "y":
             print("Writing out namelists.")
-            nlc.WriteNamelists(dir=my_dir)
-            nlc.SavePickle()
+            nlc.SaveNamelists('both')
         else:
             print("Not writing out namelists.")
     elif sel == 3:

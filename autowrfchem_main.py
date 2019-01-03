@@ -2,7 +2,7 @@ from __future__ import print_function
 import argparse
 import pdb
 
-from . import wrf_components, use_env_const, _alt_mpi_cmd_var
+from autowrfchem import wrf_components, use_env_const, _alt_mpi_cmd_var
 
 
 def configure_all(**kwargs):

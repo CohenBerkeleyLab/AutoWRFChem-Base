@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import os
 import sys
-from autowrfchem.autowrfchem_main import entry_point
+from autowrfchem_main import entry_point
 
 no_virt_env = '--no-virt-env' in sys.argv
 if no_virt_env:

@@ -4,9 +4,10 @@ from __future__ import print_function, absolute_import, division, unicode_litera
 from glob import glob
 import os
 from pkg_resources import parse_version
-import pdb
 import re
-import subprocess
+
+from .. import automation_top_dir
+from . import AUTOMATION, WRF_TOP_DIR, WPS_TOP_DIR
 
 try:
     # Python 3 names it with lower case and Python 2 has a backported version named lowercase
@@ -15,8 +16,15 @@ except ImportError:
     # Only if we can't find the newer version do we fall back on the Python 2.x version
     import ConfigParser as conpar
 
-from .. import _config_dir, ui
+from .. import _config_dir, _config_defaults_dir, ui
 from . import ConfigurationError
+
+
+class ComponentMissingError(Exception):
+    """
+    Exception to use if a required component (either model or input tool) does not exist.
+    """
+    pass
 
 
 class AutoWRFChemConfig(conpar.ConfigParser):
@@ -28,7 +36,7 @@ class AutoWRFChemConfig(conpar.ConfigParser):
     location for the configuration file baked in.
     """
     _config_file = os.path.join(_config_dir, 'autowrfchem.cfg')
-    _default_config_file = os.path.join(_config_dir, 'Defaults', 'autowrfchem_default.cfg')
+    _default_config_file = os.path.join(_config_defaults_dir, 'autowrfchem_default.cfg')
 
     @property
     def source_file(self):
@@ -178,6 +186,11 @@ def get_flexlib_dir(extra_search_dirs=[]):
     return _search_paths_for_file(search_dirs, 'libfl.a')
 
 
+def printwait(msg):
+    print(msg)
+    input('Press ENTER to continue.')
+
+
 def _search_paths_for_file(search_dirs, target):
     for path_dir in search_dirs:
         for item in os.listdir(path_dir):
@@ -204,3 +217,59 @@ def _file_version(filename):
     """
     version_str = re.search('\d+\.\d+\.\d+$', filename).group()
     return parse_version(version_str), version_str
+
+
+##########################################
+# FUNCTIONS DEALING WITH COMPONENT PATHS #
+##########################################
+
+
+def _make_component_top_dir(component_var, config_obj=None):
+    """
+    Create the path to the top directory of a component, i.e. WRF, WPS, etc.
+
+    For flexibility, AutoWRFChem v2.0 allows the paths to the WRF, WPS, etc. directories to be specified in the config
+    file rather that requiring that the be in a specific place. These paths may be given as absolute or relative paths;
+    if given as relative paths, they must be relative to the top of the automation directory (so not the autowrfchem
+    package directory, but the one above that). This function returns the absolute path to whichever component is
+    requested.
+
+    :param component_var: the config variable that has the path to the component stored.
+    :type component_var: str
+
+    :param config_obj: optional, the object representing the AWC configuration file. If omitted, the standard config
+     file is read automatically.
+    :type config_obj: AutoWRFChemConfig
+
+    :return: the absolute path to the component.
+    :rtype: str
+    """
+    if config_obj is None:
+        config_obj = AutoWRFChemConfig()
+
+    component_dir = config_obj.get(AUTOMATION, component_var)
+    if not os.path.isabs(component_dir):
+        component_dir = os.path.abspath(os.path.join(automation_top_dir, component_dir))
+
+    if not os.path.isdir(component_dir):
+        raise ComponentMissingError('The directory {} pointed to by config {} does not exist'.format(
+            component_dir, component_var
+        ))
+
+    return component_dir
+
+
+def get_wrf_top_dir(config_obj=None):
+    return _make_component_top_dir(WRF_TOP_DIR, config_obj)
+
+
+def get_wrf_run_dir(config_obj=None):
+    return os.path.join(get_wrf_top_dir(config_obj), 'run')
+
+
+def get_wps_top_dir(config_obj=None):
+    return _make_component_top_dir(WPS_TOP_DIR, config_obj)
+
+
+def get_wps_run_dir(config_obj=None):
+    return get_wps_top_dir(config_obj)

@@ -9,7 +9,8 @@ import pickle
 import re
 
 import pdb
-from . import autowrf_consts as awc
+from . import autowrf_consts as awc, config_utils
+from .. import _config_dir, _config_defaults_dir
 
 # Python 2/3 compatibility: "input()" in Python 3 is like "raw_input()" in Python 2
 try:
@@ -19,12 +20,26 @@ except NameError:
 
 #TODO: check number of domains when loading WRF namelist
 #TODO: figure out domains for WPS namelist
-#TODO: figure out why nio_tasks_per_group, and nio_groups not in registry
 
 
 DEBUG_LEVEL = 1
 
-class NamelistFormatError(Exception):
+
+class NamelistError(Exception):
+    """
+    Parent class for any namelist-related errors
+    """
+    pass
+
+
+class NamelistReadingError(NamelistError):
+    """
+    Exception to use if there's an issue reading a namelist file.
+    """
+    pass
+
+
+class NamelistFormatError(NamelistError):
     """
     Exception to use when there is an issue formatting inputs to the namelist
     """
@@ -277,7 +292,11 @@ class Namelist(object):
 
 class WrfNamelist(Namelist):
 
-    # Define extra
+    # Define extra namelist options that don't exist in the registry and whether they need to expand and contract
+    # with the number of domains.
+    # The NIO options (in &namelist_quilt) are read in by external/RSL_LITE/module_dm.F.
+    _extra_namelist_opt_domains = {'nio_tasks_per_group': True,
+                                   'nio_groups': False}
 
     # Define additional callback functions in this section, then add them to the following callbacks attribute
     def UpdateOptDomains(self, trim_extra=False):
@@ -286,13 +305,19 @@ class WrfNamelist(Namelist):
             try:
                 reg_opt = self._registry.lookup_reg_entry('rconfig', optname)
             except KeyError:
-                print('{} not in registry!'.format(optname))
+                if optname in self._extra_namelist_opt_domains:
+                    do_expand_with_domains = self._extra_namelist_opt_domains[optname]
+                else:
+                    print('{} not in registry!'.format(optname))
+                    continue
             else:
-                if reg_opt['num_entries'] == 'max_domains':
-                    if len(optval) < n_dom:
-                        self.SetOptValNoSect(optname, optval + optval[-1:] * (n_dom - len(optval)))
-                    elif len(optval) > n_dom and trim_extra:
-                        self.SetOptValNoSect(optname, optval[:n_dom])
+                do_expand_with_domains = reg_opt['num_entries'] == 'max_domains'
+
+            if do_expand_with_domains:
+                if len(optval) < n_dom:
+                    self.SetOptValNoSect(optname, optval + optval[-1:] * (n_dom - len(optval)))
+                elif len(optval) > n_dom and trim_extra:
+                    self.SetOptValNoSect(optname, optval[:n_dom])
 
     # This must come after the callback functions are defined.
     callbacks = {'max_dom': UpdateOptDomains}
@@ -525,7 +550,9 @@ class NamelistContainer:
     # common to both are kept in sync
     my_dir = os.path.dirname(__file__)
     wrf_namelist_outfile = "namelist.input"
+    wrf_namelist_template = os.path.join(_config_defaults_dir, wrf_namelist_outfile + ".template")
     wps_namelist_outfile = "namelist.wps"
+    wps_namelist_template = os.path.join(_config_defaults_dir, wps_namelist_outfile + ".template")
     pickle_file = os.path.join(my_dir, "namelist_pickle.pkl")
     cfg_fname = os.path.join(my_dir,"..","wrfbuild.cfg")
     envvar_fname = os.path.join(my_dir,"..","envvar_wrfchem.cfg")
@@ -540,18 +567,13 @@ class NamelistContainer:
                  "end_minute", "end_second", "start_date", "end_date"]
 
     def __init__(self, met=None, wrffile=None, wpsfile=None):
-        # There will be two main modes of operation: "new" will read the existing template files and generate new
-        # namelists. "mod" will load the pickled current namelist - which can be used if the program needs to make
-        # temporary changes to the namelist to produce part of the input without losing the user defined settings
-        if wrffile is None:
-            raise TypeError("A wrffile must be specified")
-        else:
-            self.wrf_namelist = WrfNamelist(wrffile)
 
-        if wpsfile is None:
-            raise TypeError("A wpsfile must be specified")
-        else:
-            self.wps_namelist = WpsNamelist(wpsfile)
+        # Require both namelist files to be given. Will provide separate method to load templates
+        if wrffile is None or wpsfile is None:
+            raise NamelistReadingError('Must give both a WRF and WPS namelist file')
+
+        self.wrf_namelist = WrfNamelist(wrffile)
+        self.wps_namelist = WpsNamelist(wpsfile)
 
         # Ensure that the options common to both WRF and WPS are synchronized
         start_date, end_date = self.wps_namelist.GetTimePeriod()
@@ -563,13 +585,17 @@ class NamelistContainer:
         if met is not None:
             self.SetMet(met)
 
-    def WriteNamelists(self, dir=None, suffix=None):
-        if dir is None:
-            wrffile = os.path.join(self.my_dir, self.wrf_namelist_outfile)
-            wpsfile = os.path.join(self.my_dir, self.wps_namelist_outfile)
-        else:
-            wrffile = os.path.join(dir, self.wrf_namelist_outfile)
-            wpsfile = os.path.join(dir, self.wps_namelist_outfile)
+    def WriteNamelists(self, namelist_dir=None, wps_namelist_dir=None, suffix=None):
+        if namelist_dir is None:
+            if wps_namelist_dir is not None:
+                TypeError('If the WPS namelist dir is given, the WRF namelist dir must also be given')
+            namelist_dir = _config_dir
+
+        if wps_namelist_dir is None:
+            wps_namelist_dir = namelist_dir
+
+        wrffile = os.path.join(namelist_dir, self.wrf_namelist_outfile)
+        wpsfile = os.path.join(wps_namelist_dir, self.wps_namelist_outfile)
 
         if suffix is not None:
             wrffile += "." + suffix
@@ -582,6 +608,57 @@ class NamelistContainer:
         with open(self.pickle_file, 'wb') as pf:
             pickle.dump(self, pf)
 
+    def SaveNamelists(self, save_mode='both', awc_config=None):
+        """
+        High level function to write the namelists out to the standard locations.
+
+        AutoWRFChem uses two copies of the namelists. The first is the "permanent" namelists that represent the full
+        model run that you want to execute. These are typically saved in the CONFIG directory. The second are the
+        "temporary" namelists that describe the piece of the run that is actually being executed. These are written
+        in the respective run directories for WRF and WPS.
+
+        This method writes the namelist files to one or both of these locations. Which ones depends on the ``save_mode``
+        input. It is to be one of the following strings:
+
+            'both' - save to both the permanent and temporary locations.
+            'perm', 'permanent' - only save the permanent namelists
+            'temp', 'temporary' - only save the temporary namelists
+
+        If you are looking for a lower level function to write the namelists to an arbitrary location, see
+        `WriteNamelists`.
+
+        :param save_mode: controls which namelists (temporary or permanent) are saved, see above. Default is 'both'.
+        :type save_mode: str
+
+        :param awc_config: an alternate `AutoWRFChemConfig` instance to specify where the WRF and WPS run directories
+         are. If not given, the standard config file is loaded automatically.
+        :type awc_config: AutoWRFChemConfig
+
+        :return: None
+        """
+
+        save_perm = False
+        save_temp = False
+
+        if save_mode.lower() == 'both':
+            save_perm = True
+            save_temp = True
+        elif save_mode.lower() in ['perm', 'permanent']:
+            save_perm = True
+        elif save_mode.lower() in ['temp', 'temporary']:
+            save_temp = True
+        else:
+            raise ValueError('Allowed values for save_mode are "both", "perm", "permanent", "temp", or "temporary"')
+
+        if save_perm:
+            self.WriteNamelists()
+
+        if save_temp:
+            wrf_dir = config_utils.get_wrf_run_dir(awc_config)
+            wps_dir = config_utils.get_wps_run_dir(awc_config)
+            self.WriteNamelists(namelist_dir=wrf_dir, wps_namelist_dir=wps_dir)
+
+
     @staticmethod
     def LoadPickle():
         if os.path.isfile(NamelistContainer.pickle_file):
@@ -590,6 +667,21 @@ class NamelistContainer:
         else:
             msg_print("No existing namelist found, loading standard template")
             return NamelistContainer()
+
+    @classmethod
+    def LoadNamelists(cls):
+        """
+        Loads the static namelists from the standard place
+
+        :return: new instance of this class
+        """
+        wrffile = os.path.join(_config_dir, cls.wrf_namelist_outfile)
+        wpsfile = os.path.join(_config_dir, cls.wps_namelist_outfile)
+        return cls(wrffile=wrffile, wpsfile=wpsfile)
+
+    @classmethod
+    def LoadTemplates(cls):
+        return cls(wrffile=cls.wrf_namelist_template, wpsfile=cls.wps_namelist_template)
 
     def SetTimePeriod(self, starttime, endtime):
         # If given datetime.time objects, it will assume that you want to set the start or end time but leave the date
@@ -1203,10 +1295,13 @@ class Registry(object):
         """
         def check_envvar(vardef):
             varname, state = vardef.split('=')
-            # TODO: actually check state.
-            #  if state is '1', then we need to check that the variable is in the config and set to 1. If '0' then need
-            #  to check that it is either missing from the config or in the config and set to 0.
-            return False
+            try:
+                env_state = self._envvar_config['ENVIRONMENT'][varname]
+            except KeyError:
+                # variable not defined in the config, so not set
+                env_state = '0'
+
+            return env_state.strip() == state.strip()
 
         reg_dict = {k: dict() for k in self._entry_types}
 
@@ -1235,7 +1330,10 @@ class Registry(object):
                 # For now, when we hit an "ifdef" we check if the condition is met; if not, we start skipping lines
                 # until the next "endif".
                 if not skipping and entry == 'ifdef':
+                    # TODO: check that the registry ifdef lines actually require the env var to be 1, not just defined
+                    # TODO: check that the registry ifdef = 0 should be True if the environmental variable is not defined
                     skipping = not check_envvar(line.split()[1])
+                    print(line, not skipping)
                 elif entry == "endif":
                     skipping = False
                 elif not skipping:
@@ -1301,8 +1399,12 @@ class Registry(object):
             val = val.split(',')
             if len(val) == 1 and val[0] == 'derived':
                 return {'how', val[0], 'section', None}
-            elif len(val) == 2 and val[1] == 'namelist':
+            elif len(val) == 2 and val[0] == 'namelist':
                 return {'how', val[0], 'section', val[1]}
+            else:
+                raise NotImplementedError('No parsing method defined for length {} and first part = "{}"'.format(
+                    len(val), val[0]
+                ))
 
         # Just need to set up the parsing functions, we'll rely on _parse_reg_line to do the heavy lifting
         names_and_parsers = [(None, None), ('type', str), ('symbol', str), ('how_set', parse_how_set),
