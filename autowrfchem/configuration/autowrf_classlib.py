@@ -9,7 +9,7 @@ import pickle
 import re
 
 import pdb
-from . import autowrf_consts as awc, config_utils
+from . import autowrf_consts as awc, config_utils, WRF_TOP_DIR, WPS_TOP_DIR
 from .. import _config_dir, _config_defaults_dir
 
 # Python 2/3 compatibility: "input()" in Python 3 is like "raw_input()" in Python 2
@@ -637,6 +637,9 @@ class NamelistContainer:
         :return: None
         """
 
+        if awc_config is None:
+            awc_config = config_utils.AutoWRFChemConfig()
+
         save_perm = False
         save_temp = False
 
@@ -649,6 +652,13 @@ class NamelistContainer:
             save_temp = True
         else:
             raise ValueError('Allowed values for save_mode are "both", "perm", "permanent", "temp", or "temporary"')
+
+        try:
+            awc_config.check_auto_vars([WRF_TOP_DIR, WPS_TOP_DIR])
+        except config_utils.ConfigurationSettingsError:
+            if save_temp:
+                print('Cannot write namelists to WRF/WPS directories, those directories are not set up correctly')
+            save_temp = False
 
         if save_perm:
             self.WriteNamelists()
