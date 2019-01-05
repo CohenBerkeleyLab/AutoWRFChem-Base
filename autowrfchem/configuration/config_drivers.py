@@ -17,41 +17,12 @@ _preset_fxns = {'get_netcdf_dir()': cu.get_ncdf_dir,
                 'get_yacc_exec()': cu.get_yacc_exec,
                 'get_flexlib_dir()': cu.get_flexlib_dir}
 
-
-def setup_envvars(config_obj):
-    # Things to check
-    presets = cu.get_envvar_presets()
-    menu_opts = OrderedDict()
-    menu_opts['Keep current configuration'] = _keep_config_envvars
-    menu_opts['Merge shell environmental variables'] = _merge_environment
-    for name, preset in presets.items():
-        menu_opts['Preset: {}'.format(name)] = lambda cobj: _set_envvar_preset(cobj, preset)
-
-    ui.user_input_menu('How would you like to set the necessary environmental variables?',
-                       menu_opts, fxn_args=[config_obj])
-
-
-def _keep_config_envvars(config_obj):
-    if config_obj.read_from_defaults:
-        prompt = \
-"""The default configuration variables are set.
-It is recommended that you choose a preset rather than use the defaults,
-as the defaults are only placeholders.
-Go back and select a preset?
-"""
-        if ui.user_input_yn(prompt, default='y'):
-            setup_envvars(config_obj)
-        else:
-            return
-    else:
-        return
-
 #####################
 # CONFIG MENU HOOKS #
 #####################
 
 
-def _check_config_state_hook(pgrm_data):
+def _check_config_state_hook(pgrm_data, force_check=False, is_exit=False):
     """
     Check the state of the AutoWRFChem config and print any issues to alert the user.
 
@@ -62,6 +33,12 @@ def _check_config_state_hook(pgrm_data):
 
     :return: None
     """
+
+    if not pgrm_data[_pgrm_main_check_key] and not force_check:
+        return
+
+    pgrm_data[_pgrm_main_check_key] = False
+
     fixes_needed = False
     config_obj = pgrm_data[_pgrm_cfg_key]
 
@@ -79,12 +56,79 @@ def _check_config_state_hook(pgrm_data):
         fixes_needed = True
 
     if fixes_needed:
-        uiel.user_message('\nYou will want to address the above issues before running the WRF/WPS configuration '
-                          'scripts.\nYou could also go ahead and save the current config an modify the config file '
-                          'manually ({})'.format(config_obj._config_file),
-                          pause=True, max_columns=_pretty_n_col)
+        msg = '\nYou will want to address the above issues before running the WRF/WPS configuration ' \
+              'scripts.\nYou could also go ahead and save the current config and modify the config file ' \
+              'manually ({})'.format(config_obj._config_file)
+        if not is_exit:
+            msg += '\n\nEach submenu has its own diagnostic option for more help\n' \
+                   'Choose "Check configuration" from the main menu to see this again'
+        uiel.user_message(msg, pause=not is_exit, max_columns=_pretty_n_col)
     else:
         uiel.user_message('\nNo issues detected.')
+
+    if is_exit:
+        return uiel.user_input_yn('\nThere are remaining issues with the configuration.\n'
+                                      'Return to the menu to correct them?', currentvalue="n")
+    else:
+        return None
+
+
+def _save_config_exit_hook(pgrm_data):
+    if _check_config_state_hook(pgrm_data, force_check=True, is_exit=True):
+        return False
+
+    config_obj = pgrm_data[_pgrm_cfg_key]
+    if config_obj.has_changed or config_obj.read_from_defaults:
+        if uiel.user_input_yn('Configuration has been changed. Save changes?'):
+            config_obj.write()
+
+
+#########################
+# COMMON MENU FUNCTIONS #
+#########################
+
+def _diagnose_env_problem(pgrm_data):
+    config_obj = pgrm_data[_pgrm_cfg_key]
+    try:
+        config_obj.check_env_vars()
+    except cu.ConfigurationSettingsError as err:
+        failures = err.args[1]
+        uiel.user_message('Problems with environmental variables that must be corrected:')
+
+        undef_vars = failures['undefined_vars']
+        if len(undef_vars) > 0:
+            uiel.user_message('\n* The following variables must be given a real value: {}'.format(', '.join(undef_vars)))
+
+        if failures['bad_netcdf_dir']:
+            is_not_dir = failures['netcdf_causes']['ncdf_dir_nonexistant']
+            ncdf_missing_files = failures['netcdf_causes']['missing_files']
+            if is_not_dir:
+                uiel.user_message('\n* The path given for the netCDF directory is not a directory')
+            else:
+                uiel.user_message('\n* The netCDF directory is invalid. The following files were not found:\n'
+                                  '    {}\n'
+                                  '(Note that these files are not all that are needed for the netCDF library, just the '
+                                  'ones that this programs tests for.)'.format('\n    '.join(ncdf_missing_files)),
+                                  max_columns=_pretty_n_col)
+
+        if failures['bad_yacc_path']:
+            uiel.user_message('The YACC path is invalid (no yacc executable found)')
+
+        if failures['bad_flex_path']:
+            uiel.user_message('The FLEX library path is invalid (no libfl.a file found)')
+
+        uiel.user_message('', pause=True)
+
+
+def _diagnose_auto_problem(pgrm_data):
+    config_obj = pgrm_data[_pgrm_cfg_key]
+    try:
+        config_obj.check_auto_vars()
+    except cu.ConfigurationSettingsError as err:
+        failures = err.args[1]
+        bad_vars = '\n    * '.join([opt for opt, chk in failures.items() if chk])
+        uiel.user_message('The following automation component paths are not directories:\n    * {}'
+                          .format(bad_vars), max_columns=_pretty_n_col, pause=True)
 
 
 ##################################
@@ -294,11 +338,12 @@ def _run_all_config(pgrm_data):
 #####################
 # MENU CONSTRUCTION #
 #####################
+_pgrm_main_check_key = 'auto_check_main'
 _pgrm_cfg_key = 'configuration'
 _pgrm_clargs_key = 'command_line_args'
 _pgrm_warn_to_choose_env = 'default_env_var_warn'
 
-config_menu = uib.Menu('AutoWRFChem - Configuration', enter_hook=_check_config_state_hook)
+config_menu = uib.Menu('AutoWRFChem - Configuration', enter_hook=_check_config_state_hook, exit_hook=_save_config_exit_hook)
 
 env_var_menu = config_menu.add_submenu('Setup environmental variables')
 env_var_menu.attach_custom_fxn('Merge shell environmental vars',
@@ -314,7 +359,13 @@ for _preset_name, _preset_section in _presets.items():
                                           lambda pgrm_data, preset=_preset_section:
                                             _set_envvar_preset(pgrm_data[_pgrm_cfg_key], preset, interactive=True))
 
-auto_setup_menu = config_menu.attach_custom_fxn('Setup automation config', _set_component_paths)
+env_var_menu.attach_custom_fxn('Diagnose problems with env. vars', _diagnose_env_problem)
+
+auto_setup_menu = config_menu.add_submenu('Setup automation config')
+component_parent_path_menu = auto_setup_menu.attach_custom_fxn('Set parent path', _set_component_paths)
+auto_setup_menu.attach_custom_fxn('Diagnose problems with automation config', _diagnose_auto_problem)
+
+config_menu.attach_custom_fxn('Check configuration', lambda pgrm_data: _check_config_state_hook(pgrm_data, force_check=True))
 
 run_config_menu = config_menu.attach_custom_fxn('Run WRF/WPS config scripts', _run_all_config)
 
@@ -333,6 +384,8 @@ def drive_configuration(**cl_args):
 
     config_obj = cu.AutoWRFChemConfig()
     config_pgrm = uib.Program(config_menu)
+
+    config_pgrm.data[_pgrm_main_check_key] = True
     config_pgrm.data[_pgrm_cfg_key] = config_obj
     config_pgrm.data[_pgrm_clargs_key] = cl_args
     config_pgrm.data[_pgrm_warn_to_choose_env] = True

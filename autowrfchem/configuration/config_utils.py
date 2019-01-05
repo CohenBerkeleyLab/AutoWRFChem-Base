@@ -2,6 +2,7 @@
 from __future__ import print_function, absolute_import, division, unicode_literals
 
 from configobj import ConfigObj
+from copy import deepcopy
 from glob import glob
 import os
 from pkg_resources import parse_version
@@ -112,6 +113,10 @@ class AutoWRFChemConfig(ConfigObj):
     def read_from_defaults(self):
         return self._read_from_defaults
 
+    @property
+    def has_changed(self):
+        return self.dict() != self._original_values
+
     def __init__(self, config_file=None, reload_defaults=True, *args, **kwargs):
         """
         See class help.
@@ -128,7 +133,9 @@ class AutoWRFChemConfig(ConfigObj):
         else:
             self.filename = self._config_file
             self.initial_comment = self._std_initial_comment
+
         self._read_from_defaults = config_file == self._default_config_file
+        self._original_values = deepcopy(self.dict())
 
     @classmethod
     def _choose_config_file(cls, config_file, reload_defaults=True):
@@ -174,12 +181,13 @@ class AutoWRFChemConfig(ConfigObj):
         :return: None
         :raises ConfigurationSettingsError: if there is a problem with any of the environmental variables.
         """
-        failures = {'undefined_vars': [], 'bad_netcdf_dir': False, 'bad_yacc_path': False, 'bad_flex_path': False}
+        failures = {'undefined_vars': [], 'bad_netcdf_dir': False, 'netcdf_causes': dict(),
+                    'bad_yacc_path': False, 'bad_flex_path': False}
         for opt, val in self[ENVIRONMENT].items():
             if val.strip() == self._missing_env_var:
                 failures['undefined_vars'].append(opt)
 
-        failures['bad_netcdf_dir'] = not _check_ncdf_dir(self[ENVIRONMENT]['NETCDF'])
+        failures['bad_netcdf_dir'] = not _check_ncdf_dir(self[ENVIRONMENT]['NETCDF'], failures['netcdf_causes'])
 
         wrf_kpp = self[ENVIRONMENT]['WRF_KPP']
         if wrf_kpp == '1':
@@ -248,7 +256,7 @@ def get_envvar_presets(preset=None):
         return presets
 
 
-def _check_ncdf_dir(ncdf_dir):
+def _check_ncdf_dir(ncdf_dir, causes=None):
     """
     Check that the given directory is a valid directory for the netCDF library.
 
@@ -261,15 +269,33 @@ def _check_ncdf_dir(ncdf_dir):
     :return: True if the directory contains the expected files, False otherwise.
     :rtype: bool
     """
+    if isinstance(causes, dict):
+        causes['ncdf_dir_nonexistant'] = False
+        causes['missing_files'] = []
+    elif causes is not None:
+        raise TypeError('causes must be a dict or None')
+
+    if not os.path.isdir(ncdf_dir):
+        if causes is not None:
+            causes['ncdf_dir_nonexistant'] = True
+        return False
+
+
     # Require that we find the "lib/libnetcdf", "lib/libnetcdff", "include/netcdf.h", and "include/netcdf.inc" files.
     # Allow static (.a) or shared (.so) files.
     req_globs = [('lib', 'libnetcdf*'), ('lib', 'libnetcdff*'), ('include', 'netcdf.h'), ('include', 'netcdf.inc')]
     for g in req_globs:
         check_files = glob(os.path.join(ncdf_dir, *g))
         if len(check_files) == 0:
-            return False
+            if causes is None:
+                return False
+            else:
+                causes['missing_files'].append(os.path.join(*g))
 
-    return True
+    if causes is None or len(causes) == 0:
+        return True
+    else:
+        return False
 
 
 def get_ncdf_dir(interactive=False):
