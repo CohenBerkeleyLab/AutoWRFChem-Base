@@ -1,17 +1,12 @@
 from __future__ import print_function, absolute_import, division
-from collections import OrderedDict
 import copy
 import os
 import subprocess
 
 from textui import uibuilder as uib, uielements as uiel
 
-from . import config_utils as cu, ENVIRONMENT, AUTOMATION
-from .. import ui
-
-import pdb
-
-_pretty_n_col = 72
+from . import  _pgrm_main_check_key, _pgrm_cfg_key, _pgrm_clargs_key, _pgrm_warn_to_choose_env, _pretty_n_col, \
+    config_utils as cu, autowrf_namelist_main as awnlmain, ENVIRONMENT, AUTOMATION
 
 _preset_fxns = {'get_netcdf_dir()': cu.get_ncdf_dir,
                 'get_yacc_exec()': cu.get_yacc_exec,
@@ -223,6 +218,13 @@ def _create_env_dict(config_obj):
     return extant_env
 
 
+def _env_var_presets_help(pgrm_data):
+    presets = cu.get_envvar_presets()
+    for sect_name, sect in presets.items():
+        # assuming EM_CORE is the first config setting, it will have the section comment
+        help_text = ' '.join([c.lstrip('# ') for c in sect.comments['EM_CORE']])
+        uiel.user_message('{}: {}\n'.format(sect_name, help_text), max_columns=_pretty_n_col)
+
 ###############################
 # AUTOMATION VARIABLE CONTROL #
 ###############################
@@ -338,10 +340,6 @@ def _run_all_config(pgrm_data):
 #####################
 # MENU CONSTRUCTION #
 #####################
-_pgrm_main_check_key = 'auto_check_main'
-_pgrm_cfg_key = 'configuration'
-_pgrm_clargs_key = 'command_line_args'
-_pgrm_warn_to_choose_env = 'default_env_var_warn'
 
 config_menu = uib.Menu('AutoWRFChem - Configuration', enter_hook=_check_config_state_hook, exit_hook=_save_config_exit_hook)
 
@@ -358,6 +356,7 @@ for _preset_name, _preset_section in _presets.items():
     env_var_preset_menu.attach_custom_fxn(_preset_name,
                                           lambda pgrm_data, preset=_preset_section:
                                             _set_envvar_preset(pgrm_data[_pgrm_cfg_key], preset, interactive=True))
+env_var_preset_menu.attach_custom_fxn('Help', _env_var_presets_help)
 
 env_var_menu.attach_custom_fxn('Diagnose problems with env. vars', _diagnose_env_problem)
 
@@ -368,6 +367,8 @@ auto_setup_menu.attach_custom_fxn('Diagnose problems with automation config', _d
 config_menu.attach_custom_fxn('Check configuration', lambda pgrm_data: _check_config_state_hook(pgrm_data, force_check=True))
 
 run_config_menu = config_menu.attach_custom_fxn('Run WRF/WPS config scripts', _run_all_config)
+
+config_menu.attach_submenu(awnlmain.namelist_main, 'Edit namelists and related config options')
 
 
 def drive_configuration(**cl_args):
@@ -392,7 +393,7 @@ def drive_configuration(**cl_args):
     #pdb.set_trace()
     config_pgrm.main_loop()
 
-    return config_pgrm.data[_pgrm_cfg_key]
+    return config_pgrm.data
 
     for config_fxn in _extern_config_fxns:
         config_fxn(config_obj, cl_args)

@@ -3,9 +3,9 @@ import sys
 import os
 import datetime as dt
 
-from . import AUTOMATION
-from . import config_utils
-from . import autowrf_classlib as WRF
+from textui import uibuilder as uib, uielements as uiel, uierrors
+
+from . import _pretty_n_col, _pgrm_cfg_key, config_utils, AUTOMATION, MET_TYPE, autowrf_classlib as WRF
 from .autowrf_classlib import UI
 import pdb
 
@@ -61,27 +61,23 @@ def SelectPreexistingNamelists():
 
     return wrffile, wpsfile
 
-def LoadMenu():
-    opts = ["Load standard templates",
-            "Load existing namelists",
-            "Modify the current namelists",
-            "Quit"]
-
-    loadmethod = UI.user_input_list("What namelist would you like to load?", opts, returntype="index")
-    if loadmethod == 0:
-        return WRF.NamelistContainer(wrffile=wrf_namelist_template_file, wpsfile=wps_namelist_template_file)
-    elif loadmethod == 1:
+def load_menu(pgrm_data, loadmethod):
+    nlcon = None
+    if loadmethod == 'templates':
+        nlcon = WRF.NamelistContainer.load_templates()
+    elif loadmethod == 'preexisting':
         wrffile, wpsfile = SelectPreexistingNamelists()
         if wrffile is not None and wpsfile is not None:
-            nlc = WRF.NamelistContainer(wrffile=wrffile, wpsfile=wpsfile)
-            nlc.UserSetMet()
-            return nlc
-        else:
-            return None
-    elif loadmethod == 2:
-        return WRF.NamelistContainer.LoadPickle()
-    elif loadmethod == 3:
-        return None
+            nlcon = WRF.NamelistContainer(wrffile=wrffile, wpsfile=wpsfile)
+    elif loadmethod == 'current':
+        if _pgrm_nl_key in pgrm_data:
+            if not uiel.user_input_yn('This will revert to the previous saved version. Continue?'):
+                return
+        nlcon = WRF.NamelistContainer.load_namelists()
+
+    if nlcon is not None:
+        pgrm_data[_pgrm_nl_key] = nlcon
+
 
 def PrintHelp(markstring):
     # Find the DOC section in this file and print it
@@ -112,9 +108,9 @@ def SaveMenu(nlc):
     sel = UI.user_input_list("Save the namelists?", opts, returntype="index")
 
     if sel == 0:
-        nlc.SaveNamelists('both')
+        nlc.save_namelists('both')
     elif sel == 1:
-        nlc.SaveNamelists('temporary')
+        nlc.save_namelists('temporary')
     elif sel == 2:
         while True:
             suffix = UI.user_input_value("suffix", noempty=True)
@@ -124,12 +120,12 @@ def SaveMenu(nlc):
             else:
                 break
 
-        nlc.WriteNamelists(namelist_dir=NamelistsPath(), suffix=suffix)
+        nlc.write_namelists(namelist_dir=NamelistsPath(), suffix=suffix)
 
         userans = input("Do you also write to make these the current namelist? y/[n]: ")
         if userans.lower() == "y":
             print("Writing out namelists.")
-            nlc.SaveNamelists('both')
+            nlc.save_namelists('both')
         else:
             print("Not writing out namelists.")
     elif sel == 3:
@@ -142,7 +138,7 @@ def StartMenu():
     while True:
         sel = UI.user_input_list("What would you like to do?", opts, returntype="index", emptycancel=False)
         if sel == 0:
-            return LoadMenu()
+            return load_menu()
         elif sel == 1:
             PrintHelp("HELP")
         elif sel == 2:
@@ -217,6 +213,150 @@ def CheckNamelists(wrf_nl, wps_nl):
 # Call startup regardless of if we are running as the main program or as a module
 Startup()
 
+
+#############################
+# HIDING AND HOOK FUNCTIONS #
+#############################
+
+
+def _registry_not_ready(pgrm_data):
+    try:
+        WRF.Registry.load_standard_registry()
+    except WRF.RegistryError:
+        uiel.user_message('The registry is not ready yet - some final setup happens during compilation. Come back to '
+                          'setup your namelists after compiling.', max_columns=_pretty_n_col, pause=True)
+        return False
+
+
+def _namelist_not_loaded(pgrm_data):
+    """
+    Checks if a namelist has been loaded yet
+
+    :param pgrm_data: the program data dictionary
+    :type pgrm_data: dict
+
+    :return: ``True`` if no namelists have been loaded yet, ``False`` otherwise
+    """
+    return _pgrm_nl_key not in pgrm_data
+
+
+def _is_not_wrf_chem(pgrm_data):
+    return not config_utils.get_is_chem(pgrm_data[_pgrm_cfg_key])
+
+
+###########################
+# NAMELIST EDIT FUNCTIONS #
+###########################
+
+def _set_start_end_dates(pgrm_data):
+    nlc = pgrm_data[_pgrm_nl_key]
+    nlc.user_set_time_period()
+
+
+def _set_shared_domain(pgrm_data):
+    nlc = pgrm_data[_pgrm_nl_key]
+    nlc.user_set_domain()
+
+
+def _restore_met_opts(pgrm_data):
+    cfg_obj = pgrm_data[_pgrm_cfg_key]
+    curr_met = cfg_obj[AUTOMATION][MET_TYPE]
+
+    if curr_met == '':
+        raise config_utils.ConfigurationSettingsError('MET_TYPE not set')
+
+    nlc = pgrm_data[_pgrm_nl_key]
+    nlc.set_met(curr_met)
+
+
+def _set_other_opt(pgrm_data, namelist_name):
+    nlc = pgrm_data[_pgrm_nl_key]
+    if namelist_name == 'wrf':
+        nlc.user_set_other_opt(nlc.wrf_namelist)
+    elif namelist_name == 'wps':
+        nlc.user_set_other_opt(nlc.wps_namelist)
+    else:
+        raise NotImplementedError('namelist_name == "{}"'.format(namelist_name))
+
+
+def _display_opts(pgrm_data, namelist_name):
+    nlc = pgrm_data[_pgrm_nl_key]
+    if namelist_name == 'wrf':
+        nlc.display_options(nlc.wrf_namelist)
+    elif namelist_name == 'wps':
+        nlc.display_options(nlc.wps_namelist)
+    else:
+        raise NotImplementedError('namelist_name == "{}"'.format(namelist_name))
+
+
+def _check_nei_compat(pgrm_data):
+    nlc = pgrm_data[_pgrm_nl_key]
+    nlc.user_nei_compat_check()
+
+
+def _choose_met_type(pgrm_data):
+    avail_mets = config_utils.get_met_presets()
+    met_names = list(avail_mets.keys())
+
+    config_obj = pgrm_data[_pgrm_cfg_key]
+    current_met = config_obj[AUTOMATION][MET_TYPE]
+    if current_met == '':
+        current_met = None
+
+    selected_met = uiel.user_input_list('Choose a met type', met_names, currentvalue=current_met)
+    if selected_met is not None:
+        config_obj[AUTOMATION][MET_TYPE] = selected_met
+        nlc = pgrm_data[_pgrm_nl_key]
+        nlc.set_met(selected_met)
+
+
+def _set_chem_mechanism(pgrm_data):
+    avail_chems = config_utils.get_chem_presets()
+    chem_names = list(avail_chems.keys())
+
+    nlc = pgrm_data[_pgrm_nl_key]
+    curr_chem_opt = nlc.wrf_namelist.GetOptValNoSect('chem_opt')
+    curr_chem_name = None
+    for name, sect in avail_chems:
+        if curr_chem_opt == sect['WRF']['CHEM']['CHEM_OPT']:
+            curr_chem_name = name
+            break
+
+    selected_chem = uiel.user_input_list('Choose a chemistry mechanism', chem_names, currentvalue=curr_chem_name)
+    if selected_chem is not None:
+        nlc.set_chem(selected_chem)
+
+
+def _choose_mozbc_file(pgrm_data):
+    raise NotImplementedError('Choosing MOZBC file not updated to AWC v2.0.0 ')
+
+
+##############################
+# NAMELIST MENU CONSTRUCTION #
+##############################
+_pgrm_nl_key = 'namelists'
+namelist_main = uib.Menu('Namelists', enter_hook=_registry_not_ready)
+
+loading_menu = namelist_main.add_submenu('Load different namelists', auto_exit=True)
+loading_menu.attach_custom_fxn('Load/reload existing namelists', lambda pgrm_data: load_menu(pgrm_data, 'current'))
+loading_menu.attach_custom_fxn('Load previously saved namelists', lambda pgrm_data: load_menu(pgrm_data, 'preexisting'))
+loading_menu.attach_custom_fxn('Load the standard templates', lambda pgrm_data: load_menu(pgrm_data, 'templates'))
+
+edit_menu_top = namelist_main.add_submenu('Edit namelist options', hide_if=_namelist_not_loaded)
+edit_menu_top.attach_custom_fxn('Set start/end date', _set_start_end_dates)
+edit_menu_top.attach_custom_fxn('Set shared domain options', _set_shared_domain)
+edit_menu_top.attach_custom_fxn('Revert met-relevant options to recommended', _restore_met_opts)
+edit_menu_top.attach_custom_fxn('Choose chemical mechanism', _set_chem_mechanism, hide_if=_is_not_wrf_chem)
+edit_menu_top.attach_custom_fxn('Set other WRF options', lambda pgrm_data: _set_other_opt(pgrm_data, 'wrf'))
+edit_menu_top.attach_custom_fxn('Set other WPS options', lambda pgrm_data: _set_other_opt(pgrm_data, 'wps'))
+edit_menu_top.attach_custom_fxn('Display WRF options', lambda pgrm_data: _display_opts(pgrm_data, 'wrf'))
+edit_menu_top.attach_custom_fxn('Display WPS options', lambda pgrm_data: _display_opts(pgrm_data, 'wps'))
+edit_menu_top.attach_custom_fxn('Check NEI compatibility', _check_nei_compat, hide_if=_is_not_wrf_chem)
+
+namelist_main.attach_custom_fxn('Select meteorology', _choose_met_type, hide_if=_namelist_not_loaded)
+namelist_main.attach_custom_fxn('Select MOZBC data file', _choose_mozbc_file,
+                                hide_if=lambda pgrm_data: _is_not_wrf_chem(pgrm_data) or _namelist_not_loaded(pgrm_data))
+
 if __name__ == "__main__":
 
     # Namelist generation has 3 modes:
@@ -290,12 +430,12 @@ if __name__ == "__main__":
                         nlc = WRF.NamelistContainer(met=metopt, wrffile=wrf_namelist_template_file,
                                                     wpsfile=wps_namelist_template_file)
 
-                    nlc.WriteNamelists()
+                    nlc.write_namelists()
                     nlc.SavePickle()
 
         elif arg[1] == "mod" or arg[1] == "modify" or arg[1] == "tempmod":
             # So this needs to parse the options looking for a couple things:
-            #   1) start-date and end-date need to be handled specially, to use the SetTimePeriod method
+            #   1) start-date and end-date need to be handled specially, to use the set_time_period method
             #   2) run-time also needs to be handled specially as well
             #   3) Also add the capability to do relative changes to start and end time with the syntax
             #       --start-date=+12h
@@ -319,13 +459,13 @@ if __name__ == "__main__":
                 elif optname == "--run-time":
                     run_time = ParseTimeDelta(optval)
                 elif optname == "--met":
-                    nlc.SetMet(optval)
+                    nlc.set_met(optval)
                 else:
                     optname = optname.replace("-", "")
-                    nlc.CmdSetOtherOpt(optname, optval, forceWrfOnly=force_wrf_only)
+                    nlc.cmd_set_other_opt(optname, optval, force_wrf_only=force_wrf_only)
 
             if start_date is not None or end_date is not None:
-                nlc.SetTimePeriod(start_date, end_date)
+                nlc.set_time_period(start_date, end_date)
 
             if run_time is not None:
                 if run_time < dt.timedelta(0):
@@ -333,11 +473,11 @@ if __name__ == "__main__":
                     exit(1)
 
                 # both are returned to ensure it is not stored as a tuple
-                start_date, end_date = nlc.GetTimePeriod()
+                start_date, end_date = nlc.get_time_period()
                 end_date = start_date + run_time
-                nlc.SetTimePeriod(start_date, end_date)
+                nlc.set_time_period(start_date, end_date)
 
-            nlc.WriteNamelists()
+            nlc.write_namelists()
             # Only write the pickle if the change is not temporary
             if arg[1] == "mod" or arg[1] == "modify":
                 nlc.SavePickle()
@@ -412,10 +552,10 @@ if __name__ == "__main__":
 
             optname = arg[2].replace("-", "")
             if optname == "startdate":
-                start_date, end_date = nlc.GetTimePeriod()
+                start_date, end_date = nlc.get_time_period()
                 print(start_date.strftime("%Y-%m-%d_%H:%M:%S"))
             elif optname == "enddate":
-                start_date, end_date = nlc.GetTimePeriod()
+                start_date, end_date = nlc.get_time_period()
                 print(end_date.strftime("%Y-%m-%d_%H:%M:%S"))
             elif not namelist.IsOptInNamelist(optname):
                 eprint("Could not find '{0}' in specified namelist".format(optname))

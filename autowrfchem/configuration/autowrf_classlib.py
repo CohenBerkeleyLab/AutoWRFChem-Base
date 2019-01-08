@@ -8,8 +8,10 @@ import os
 import pickle
 import re
 
+from textui import uibuilder as uib, uielements as uiel
+
 import pdb
-from . import autowrf_consts as awc, config_utils, WRF_TOP_DIR, WPS_TOP_DIR
+from . import autowrf_consts as awc, config_utils, ENVIRONMENT, WRF_TOP_DIR, WPS_TOP_DIR
 from .. import _config_dir, _config_defaults_dir
 
 # Python 2/3 compatibility: "input()" in Python 3 is like "raw_input()" in Python 2
@@ -46,10 +48,25 @@ class NamelistFormatError(NamelistError):
     pass
 
 
-class RegistryParsingError(Exception):
+class RegistryError(Exception):
+    """
+    Base class for all registry related errors
+    """
+    pass
+
+
+class RegistryParsingError(RegistryError):
     """
     Exception to use when there is a problem parsing a registry file
     """
+    pass
+
+
+class RegistryIOError(RegistryError):
+    """
+    Exception to use when cannot find the registry file to load
+    """
+    pass
 
 
 def msg_print(msg):
@@ -70,6 +87,8 @@ class Namelist(object):
     # the NamelistContainer class to print the list of allowable meteorogies. Make
     # sure that each entry in this list has a corresponding if or elif branch in
     # SetMetOpts for each child namelist
+    #
+    # TODO: replace with those defined in the config file
     mets = ["NARR"]
 
     # functions that will be called whenever an option (given by the key) is set. The function will receive the namelist
@@ -566,14 +585,16 @@ class NamelistContainer:
                  "start_hour", "start_minute", "start_second", "end_year", "end_month", "end_day", "end_hour",
                  "end_minute", "end_second", "start_date", "end_date"]
 
-    def __init__(self, met=None, wrffile=None, wpsfile=None):
+    def __init__(self, met=None, wrffile=None, wpsfile=None, registry=None):
 
         # Require both namelist files to be given. Will provide separate method to load templates
         if wrffile is None or wpsfile is None:
             raise NamelistReadingError('Must give both a WRF and WPS namelist file')
+        if registry is None:
+            registry = Registry.load_standard_registry()
 
-        self.wrf_namelist = WrfNamelist(wrffile)
-        self.wps_namelist = WpsNamelist(wpsfile)
+        self.wrf_namelist = WrfNamelist(wrffile, registry=registry)
+        self.wps_namelist = WpsNamelist(wpsfile, registry=registry)
 
         # Ensure that the options common to both WRF and WPS are synchronized
         start_date, end_date = self.wps_namelist.GetTimePeriod()
@@ -583,9 +604,27 @@ class NamelistContainer:
 
         # Met option will have to be given on the command line
         if met is not None:
-            self.SetMet(met)
+            self.set_met(met)
 
-    def WriteNamelists(self, namelist_dir=None, wps_namelist_dir=None, suffix=None):
+    def write_namelists(self, namelist_dir=None, wps_namelist_dir=None, suffix=None):
+        """
+        Write the WRF and WPS namelists out as files.
+
+        :param namelist_dir: the directory to write the namelist files to. If not given, will write to the standard
+         CONFIG directory.
+        :type namelist_dir: str
+
+        :param wps_namelist_dir: the directory to write the WPS namelist to. If not given, both WRF and WPS namelists
+         will be written to the same directory. If given, the WRF namelists is written to ``namelist_dir`` and the
+         WPS namelist to this one. Note that ``namelist_dir`` must be given if this one is.
+        :type wps_namelist_dir: str
+
+        :param suffix: a suffix to append to the WRF and WPS namelist file. The form of the file names will be
+         ``namelist.{input,wps}.{suffix}``.
+        :type suffix: str
+
+        :return: None
+        """
         if namelist_dir is None:
             if wps_namelist_dir is not None:
                 TypeError('If the WPS namelist dir is given, the WRF namelist dir must also be given')
@@ -604,11 +643,7 @@ class NamelistContainer:
         self.wrf_namelist.WriteNamelist(wrffile)
         self.wps_namelist.WriteNamelist(wpsfile)
 
-    def SavePickle(self):
-        with open(self.pickle_file, 'wb') as pf:
-            pickle.dump(self, pf)
-
-    def SaveNamelists(self, save_mode='both', awc_config=None):
+    def save_namelists(self, save_mode='both', awc_config=None):
         """
         High level function to write the namelists out to the standard locations.
 
@@ -625,7 +660,7 @@ class NamelistContainer:
             'temp', 'temporary' - only save the temporary namelists
 
         If you are looking for a lower level function to write the namelists to an arbitrary location, see
-        `WriteNamelists`.
+        `write_namelists`.
 
         :param save_mode: controls which namelists (temporary or permanent) are saved, see above. Default is 'both'.
         :type save_mode: str
@@ -661,25 +696,15 @@ class NamelistContainer:
             save_temp = False
 
         if save_perm:
-            self.WriteNamelists()
+            self.write_namelists()
 
         if save_temp:
             wrf_dir = config_utils.get_wrf_run_dir(awc_config)
             wps_dir = config_utils.get_wps_run_dir(awc_config)
-            self.WriteNamelists(namelist_dir=wrf_dir, wps_namelist_dir=wps_dir)
-
-
-    @staticmethod
-    def LoadPickle():
-        if os.path.isfile(NamelistContainer.pickle_file):
-            with open(NamelistContainer.pickle_file, 'rb') as pf:
-                return pickle.load(pf)
-        else:
-            msg_print("No existing namelist found, loading standard template")
-            return NamelistContainer()
+            self.write_namelists(namelist_dir=wrf_dir, wps_namelist_dir=wps_dir)
 
     @classmethod
-    def LoadNamelists(cls):
+    def load_namelists(cls):
         """
         Loads the static namelists from the standard place
 
@@ -690,27 +715,66 @@ class NamelistContainer:
         return cls(wrffile=wrffile, wpsfile=wpsfile)
 
     @classmethod
-    def LoadTemplates(cls):
+    def load_templates(cls):
+        """
+        Load the standard namelist template files.
+
+        :return: new instance of this class
+        """
         return cls(wrffile=cls.wrf_namelist_template, wpsfile=cls.wps_namelist_template)
 
-    def SetTimePeriod(self, starttime, endtime):
+    def set_time_period(self, start_time, end_time):
+        """
+        Set the time period for the WRF and WPS namelists.
+
+        Setting via this method ensures that the WRF and WPS namelist time periods stay in sync and that the WRF
+        start/end date and run time settings are consistent.
+
+        :param start_time: the beginning of the model run. If given as a `datetime.time` object, only the hour/minute/
+         second of the start time will be changed; the year/month/day will be kept at their current values.
+        :type start_time: `datetime.datetime` or `datetime.time`
+
+        :param end_time: the end of the model run.  If given as a `datetime.time` object, only the hour/minute/
+         second of the start time will be changed; the year/month/day will be kept at their current values.
+        :type end_time: `datetime.datetime` or `datetime.time`
+
+        :return: None
+        """
         # If given datetime.time objects, it will assume that you want to set the start or end time but leave the date
         # component alone
         curr_start, curr_end = self.wps_namelist.GetTimePeriod()
-        if type(starttime) is dt.time:
-            starttime = dt.datetime(curr_start.year, curr_start.month, curr_start.day, starttime.hour, starttime.minute, starttime.second)
+        if type(start_time) is dt.time:
+            start_time = dt.datetime(curr_start.year, curr_start.month, curr_start.day, start_time.hour, start_time.minute, start_time.second)
 
-        if type(endtime) is dt.time:
-            endtime = dt.datetime(curr_end.year, curr_end.month, curr_end.day, endtime.hour, endtime.minute, endtime.second)
+        if type(end_time) is dt.time:
+            end_time = dt.datetime(curr_end.year, curr_end.month, curr_end.day, end_time.hour, end_time.minute, end_time.second)
 
-        self.wrf_namelist.SetTimePeriod(starttime, endtime)
-        self.wps_namelist.SetTimePeriod(starttime, endtime)
+        self.wrf_namelist.SetTimePeriod(start_time, end_time)
+        self.wps_namelist.SetTimePeriod(start_time, end_time)
 
-    def GetTimePeriod(self):
-        # Basically a shortcut method to the WPS method of the same name
-        return self.wps_namelist.GetTimePeriod()
+    def get_time_period(self):
+        """
+        Get the time period that each domain of the model will run for.
 
-    def UserSetTimePeriod(self):
+        :return: list of start/end date tuples, one per domain.
+        :rtype: list of tuples of `datetime.datetime`s
+        """
+        # Basically a shortcut method to the WRF method of the same name. Switch from WPS to WRF for nesting: commonly,
+        # inner nested domains only run the first time step for WPS since boundary conditions are then provided by the
+        # outer domain. So getting the time from the WPS namelists doesn't really make sense.
+        return self.wrf_namelist.GetTimePeriod()
+
+    def user_set_time_period(self):
+        """
+        Interactively set the start and end dates for all domains.
+
+        Currently, it assumes that all domains will run for the same time period.
+
+        :return: None
+        """
+
+        # TODO: update for multiple domains
+        # TODO: replace UI calls with textui
         curr_start, curr_end = self.wps_namelist.GetTimePeriod()
         start_time = UI.user_input_date("Enter the starting date", currentvalue=curr_start)
         if start_time is None:
@@ -720,12 +784,20 @@ class NamelistContainer:
         if end_time is None:
             end_time = curr_end
 
-        self.SetTimePeriod(start_time, end_time)
+        self.set_time_period(start_time, end_time)
 
         msg_print("Having modified the time period, verify that the correct MOZBC data file has been selected.")
         NamelistContainer.UserSetMozFile()
 
-    def UserSetDomain(self):
+    def user_set_domain(self):
+        """
+        Set the domain options interactively.
+
+        :return: None
+        """
+
+        # TODO: update for multiple domains?
+        # TODO: replace UI calls with textui
         for opt in self.domain_opts:
             optval = UI.user_input_value(opt, currval=self.wps_namelist.GetOptValNoSect(opt, 1))
             if optval is not None:
@@ -734,11 +806,28 @@ class NamelistContainer:
         msg_print("Having modified the domain, verify that the correct MOZBC data file has been selected.")
         NamelistContainer.UserSetMozFile()
 
-    def UserSetMet(self):
-        met_type = UI.user_input_list("Choose your meteorology: ", self.GetTypeList(self.met_fname))
-        self.SetMet(met_type)
+    def user_set_met(self):
+        """
+        Set the meteorology interactively
 
-    def SetMet(self, met_type):
+        :return: None
+        """
+
+        # TODO: should this be moved out of the namelist container?
+        # TODO: replace UI with textui
+
+        met_type = UI.user_input_list("Choose your meteorology: ", self.GetTypeList(self.met_fname))
+        self.set_met(met_type)
+
+    def set_met(self, met_type):
+        """
+        Set all namelist options relevant for the given meteorology
+
+        :param met_type: the meteorology type
+        :type met_type: str
+
+        :return: None
+        """
         if met_type not in self.GetTypeList(self.met_fname):
             raise RuntimeError("{0} is not a valid meteorology. Allowed meteorologies are {1}".
                                format(met_type, ', '.join(self.GetTypeList(self.met_fname))))
@@ -775,7 +864,12 @@ class NamelistContainer:
             msg_print("Warning: could not find the wrfbuild.cfg file to ensure the meteorology is consistent.")
             msg_print("Check that the meteorology is correct in that file before running WPS.")
 
-    def UserSetChem(self):
+    def user_set_chem(self):
+        """
+        Choose chemical mechanism interactively
+
+        :return: None
+        """
         self.CheckTypeListFormat(self.chem_fname)
         chem_types = self.GetTypeList(self.chem_fname)
         if len(chem_types) == 0:
@@ -784,9 +878,33 @@ class NamelistContainer:
 
         chem_type = UI.user_input_list("Choose a chemistry type: ", chem_types)
         if chem_type is not None:
-            self.SetChem(chem_type)
+            self.set_chem(chem_type)
 
-    def UserSetMapProj(self, neionly=False):
+    def set_chem(self, chem_type):
+        """
+        Set namelist options relevant for the specified chemical mechanism
+
+        :param chem_type: the name of the chemical mechanism
+        :type chem_type: str
+
+        :return: None
+        """
+        chem_opts = self.GetChemTypeOpts(chem_type)
+        if chem_opts is not None:
+            for opt in chem_opts:
+                nl = opt["namelist"]
+                nl.SetOptVal(opt["section"], opt["name"], opt["value"])
+
+    def user_set_map_proj(self, neionly=False):
+        """
+        Interactively set the map project WPS uses to map lat/lon to model grid
+
+        :param neionly: optional, if ``True``, restrict the available options to those compatible with the NEI emissions
+         preparation tool. Default is ``False``.
+        :type neionly: bool
+
+        :return: None
+        """
         # Special method to set the WPS map projection that will present a list of options and
         # tell the namelist to adjust the other options accordingly (some are not needed to certain
         # projections)
@@ -796,14 +914,17 @@ class NamelistContainer:
         else:
             proj_list = self.wps_namelist.allowed_proj
 
-
         optval = UI.user_input_list("Choose a map projection: ", proj_list,
                                     currentvalue=self.wps_namelist.GetOptValNoSect("map_proj", 1, noquotes=True))
         if optval is not None:
             self.wps_namelist.SetMapProj(optval, neionly)
 
-    def UserSetFDDAEnd(self):
+    def user_set_fdda_end(self):
+        """
+        Set the namelist so that FDDA nudging will be used for the entire model run
 
+        :return: None
+        """
         whole_run = UI.user_input_yn("Use FDDA nudging for the entire run?")
         if whole_run:
             run_hours = self.wrf_namelist.GetRunTime(runtime_unit="hours")
@@ -818,15 +939,8 @@ class NamelistContainer:
             if optval is not None:
                 self.wrf_namelist.SetOptVal("fdda", "gfdda_end_h", optval)
 
-
-    def SetChem(self, chem_type):
-        chem_opts = self.GetChemTypeOpts(chem_type)
-        if chem_opts is not None:
-            for opt in chem_opts:
-                nl = opt["namelist"]
-                nl.SetOptVal(opt["section"], opt["name"], opt["value"])
-
     def GetTypeList(self, list_file):
+        # TODO: unneeded? or update to work with config files?
         types = []
         with open(list_file, 'r') as f:
             for line in f:
@@ -839,6 +953,7 @@ class NamelistContainer:
         return types
 
     def GetMetTypeOpts(self, met_type):
+        # TODO: convert to using the config files
         met_opts = []
         found_met = False
         reading_met = False
@@ -862,6 +977,7 @@ class NamelistContainer:
             return met_opts
 
     def GetChemTypeOpts(self, chem_type):
+        # TODO: convert to using the config files
         chem_opts = []
         found_chem = False
         reading_chem = False
@@ -907,6 +1023,7 @@ class NamelistContainer:
             return chem_opts
 
     def ParseOptionLine(self, line):
+        # probably not needed
         lsplit = line.split("=")
         optid = lsplit[0].strip().split(":")
         if len(optid) != 3:
@@ -927,6 +1044,7 @@ class NamelistContainer:
         return {"namelist":nl, "section":optsect, "name": optname, "value":optval}
 
     def CheckTypeListFormat(self, list_file):
+        # probably not needed
         list_shortfile = os.path.basename(list_file)
 
         line_num = 0
@@ -999,6 +1117,8 @@ class NamelistContainer:
 
     @staticmethod
     def UserSetMozFile():
+        # TODO: massive rework
+
         # This function should be called any time the domain or time period is changed. It will ask the user to verify
         # that the current Mozart boundary condition file is the correct one, or set one if none exists.
         # First we need two pieces of information: one, if there is a current file, what it is. Two, what files are
@@ -1059,7 +1179,16 @@ class NamelistContainer:
             if not wroteMoz:
                 cfgw.write("mozbcFile=\"{0}\"\n".format(newMozFilename))
 
-    def UserSetOtherOpt(self, namelist):
+    def user_set_other_opt(self, namelist):
+        """
+        Interactively set a namelist option not controlled by a special setter
+
+        :param namelist: the namelist object to modify
+        :type namelist: `Namelist`
+
+        :return: None
+        """
+        # TODO: merge common checks with cmd_set_other_opt
         sect = UI.user_input_list("Choose the namelist section: ", namelist.opts.keys())
         if sect is None:
             return
@@ -1078,29 +1207,42 @@ class NamelistContainer:
             msg_print("Note: {0} is usually set by choosing a meteorology type, not directly".format(opt))
 
         if opt == "map_proj":
-            self.UserSetMapProj()
+            self.user_set_map_proj()
         elif opt == "gfdda_end_h":
-            self.UserSetFDDAEnd()
+            self.user_set_fdda_end()
         else:
             optval = UI.user_input_value(opt, isbool=namelist.IsOptBool(sect, opt), currval=namelist.GetOptValNoSect(opt, 1))
 
             if optval is not None:
                 namelist.SetOptVal(sect, opt, optval)
 
-    def DisplayOptions(self, namelist):
-        sectnames = namelist.opts.keys()
+    def display_options(self, namelist):
+        """
+        Interactively display current values for options in a section of the namelist
+
+        :param namelist: the namelist object to modify
+        :type namelist: `Namelist`
+
+        :return: None
+        """
+        sectnames = list(namelist.opts.keys())
         sectnames.append("All")
         sect = UI.user_input_list("Which namelist section to display?", sectnames)
         if sect == "All":
             for s in namelist.opts.keys():
                 msg_print("{0}:".format(s))
-                for k,v in namelist.opts[s].iteritems():
+                for k,v in namelist.opts[s].items():
                     msg_print("  {0} = {1}".format(k,v))
         elif sect is not None:
-            for k,v in namelist.opts[sect].iteritems():
+            for k,v in namelist.opts[sect].items():
                 msg_print("  {0} = {1}".format(k,v))
 
-    def UserNEICompatCheck(self):
+    def user_nei_compat_check(self):
+        """
+        Interactively verify that the WPS settings are compatible with the NEI emissions prep tool
+
+        :return: None
+        """
         # This will go through the WPS options and make sure that they are compatible with the NEI gridding program
         # which only handles lambert and polar map projections and requires stand_lon == ref_lon
 
@@ -1108,7 +1250,7 @@ class NamelistContainer:
         curr_proj = self.wps_namelist.GetOptValNoSect("map_proj",1)
         if curr_proj not in ["'lambert'", "lambert", "'polar'", "polar"]:
             if UI.user_input_yn("map_proj must be 'lambert' or 'polar' for NEI emissions. Change it?"):
-                self.UserSetMapProj(neionly=True)
+                self.user_set_map_proj(neionly=True)
 
         wps_expect_opt = ["stand_lon", "ref_lon", "ref_lat", "truelat1", "truelat2", "dx", "dy"]
         wrf_expect_opt = ["io_form_auxinput5", "io_style_emissions", "emiss_inpt_opt", "kemit"]
@@ -1193,14 +1335,29 @@ class NamelistContainer:
             if UI.user_input_yn("Set kemit to 19?"):
                 self.wrf_namelist.SetOptValNoSect("kemit", 19)
 
-    def CmdSetOtherOpt(self, optname, optval, forceWrfOnly=False):
+    def cmd_set_other_opt(self, optname, optval, force_wrf_only=False):
+        """
+        Set a namelist option non-interactively
+
+        :param optname: the option name to change
+        :type optname: str
+
+        :param optval: the value to give the option
+
+        :param force_wrf_only: optional, if ``True`` only the WRF namelist will be changed even if the option also
+         exists in the WPS namelist.
+        :type force_wrf_only: bool
+
+        :return: None
+        """
         # This one will be fairly complicated. First, we need to see if the option is one that is shared (domain opts)
         # or one that should not be set directly. After that, we need to figure out which namelist it belongs to, then
         # set it for that namelist. Will also need to check if the setting is a boolean before setting it.
         if optname in self.date_opts:
             raise RuntimeError("Do not set {0} directly, it must be set using the date/run time options.".format(optname))
         elif optname in self.domain_opts:
-            if not forceWrfOnly:
+            # TODO: seems like this would raise a KeyError a lot of the time...
+            if not force_wrf_only:
                 self.wps_namelist.SetOptValNoSect(optname, optval)
             self.wrf_namelist.SetOptValNoSect(optname, optval)
         else:
@@ -1220,6 +1377,7 @@ class NamelistContainer:
             namelist.SetOptVal(sect, optname, optval)
 
     def UserMenu(self):
+        # TODO: extract from this class
         # Present a menu to let the user modify the namelist once. So this should be called from a while loop to allow
         # user to modify mulitple options. Returns True or False, False if the user has requested to exit.
         prmpt = "Choose what to modify or do:"
@@ -1228,29 +1386,33 @@ class NamelistContainer:
                 "Display WPS options", "Save and exit"]
         sel = UI.user_input_list(prmpt, opts, returntype="index", emptycancel=False)
         if sel == 0:
-            self.UserSetTimePeriod()
+            self.user_set_time_period()
         elif sel == 1:
-            self.UserSetDomain() # Note that this only sets the options SHARED between WRF and WPS
+            self.user_set_domain() # Note that this only sets the options SHARED between WRF and WPS
         elif sel == 2:
-            self.UserSetMet()
+            self.user_set_met()
         elif sel == 3:
-            self.UserSetChem()
+            self.user_set_chem()
         elif sel == 4:
-            self.UserSetOtherOpt(self.wrf_namelist)
+            self.user_set_other_opt(self.wrf_namelist)
         elif sel == 5:
-            self.UserSetOtherOpt(self.wps_namelist)
+            self.user_set_other_opt(self.wps_namelist)
         elif sel == 6:
-            self.UserNEICompatCheck()
+            self.user_nei_compat_check()
         elif sel == 7:
             NamelistContainer.UserSetMozFile()
         elif sel == 8:
-            self.DisplayOptions(self.wrf_namelist)
+            self.display_options(self.wrf_namelist)
         elif sel == 9:
-            self.DisplayOptions(self.wps_namelist)
+            self.display_options(self.wps_namelist)
         elif sel == 10:
             return False
 
         return True
+
+    def edit_main_menu(self):
+        pass
+
   
 
 class Registry(object):
@@ -1293,6 +1455,42 @@ class Registry(object):
         self._entry_types = entry_types
         self._registry = self._parse_reg_file(registry_file)
 
+    @classmethod
+    def load_standard_registry(cls, **kwargs):
+        """
+        Load the standard registry file from the WRF directory defined in the configuration.
+
+        This tries to find $WRF_TOP_DIR/Registry/Registry first. If it cannot find that, it looks for either
+        $WRF_TOP_DIR/Registry/Registry.EM or $WRF_TOP_DIR/Registry/Registry.NMM depending on which WRF core is selected.
+
+        :param kwargs: Additional keyword arguments to pass through to the class __init__ function.
+
+        :return: new instance of the Registry class.
+        :rtype: `Registry`.
+        """
+        config_obj = config_utils.AutoWRFChemConfig()
+        wrf_reg_dir = os.path.join(config_utils.get_wrf_top_dir(config_obj), 'Registry')
+
+        tested_reg_files = ['Registry']
+        std_reg_file = os.path.join(wrf_reg_dir, tested_reg_files[-1])
+
+        if not os.path.isfile(std_reg_file):
+            # Possible that we don't have the Registry file because Registry.EM or Registry.NMM are copied to Registry
+            # in the compile script.
+            wrf_core = config_utils.get_selected_core(config_obj)
+            if wrf_core == 'arw':
+                tested_reg_files.append(['Registry.EM'])
+            elif wrf_core == 'nmm':
+                tested_reg_files.append(['Registry.NMM'])
+
+            print('Cannot find Registry file, looking for {}'.format(tested_reg_files[-1]))
+            std_reg_file = os.path.join(wrf_reg_dir, tested_reg_files[-1])
+            raise RegistryIOError('Cannot find either standard registry file ({}) in {}.\n'.format(
+                ' or '.join(std_reg_file), wrf_reg_dir
+            ))
+
+        return cls(std_reg_file, config_obj, **kwargs)
+
     def _parse_reg_file(self, reg_file):
         """
         Parse a single registry file.
@@ -1314,6 +1512,9 @@ class Registry(object):
             return env_state.strip() == state.strip()
 
         reg_dict = {k: dict() for k in self._entry_types}
+
+        if not os.path.isfile(reg_file):
+            raise RegistryIOError('Registry file "{}" does not exist'.format(reg_file))
 
         with open(reg_file, 'r') as rfile:
             # opened a new registry file: add it to the stack. allows recursive calls to this function to keep track
@@ -1343,7 +1544,6 @@ class Registry(object):
                     # TODO: check that the registry ifdef lines actually require the env var to be 1, not just defined
                     # TODO: check that the registry ifdef = 0 should be True if the environmental variable is not defined
                     skipping = not check_envvar(line.split()[1])
-                    print(line, not skipping)
                 elif entry == "endif":
                     skipping = False
                 elif not skipping:

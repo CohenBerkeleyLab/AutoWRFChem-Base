@@ -135,6 +135,9 @@ class AutoWRFChemConfig(ConfigObj):
             self.initial_comment = self._std_initial_comment
 
         self._read_from_defaults = config_file == self._default_config_file
+        if not self._read_from_defaults:
+            self._check_all_opts_present()
+            
         self._original_values = deepcopy(self.dict())
 
     @classmethod
@@ -169,6 +172,23 @@ class AutoWRFChemConfig(ConfigObj):
             return config_file
         else:
             raise ConfigurationLoadError('Given custom config file ({}) does not exist!'.format(config_file))
+
+    def _check_all_opts_present(self):
+        section_hierarchy = []
+
+        def walk_section(my_section, default_section):
+            for key in default_section.keys():
+                if key not in my_section:
+                    section_hierarchy.append(key)
+                    raise ConfigurationSetupError('Key {} from default config file is missing from active one'.
+                        format('/'.join(section_hierarchy)))
+                elif key in default_section.sections:
+                    section_hierarchy.append(key)
+                    walk_section(my_section[key], default_section[key])
+                    section_hierarchy.remove(key)
+
+        default_cfg = ConfigObj(self._default_config_file)
+        walk_section(self, default_cfg)
 
     def check_env_vars(self):
         """
@@ -237,23 +257,57 @@ class AutoWRFChemConfig(ConfigObj):
             raise ConfigurationSettingsError('There is a problem with the current automation configs', failures)
 
 
+def _get_presets_file(filename, preset=None):
+    if not os.path.isabs(filename):
+        filename = os.path.join(_config_defaults_dir, filename)
+
+    cfg = ConfigObj(filename)
+    if preset is None:
+        return cfg
+    else:
+        return cfg[preset]
+
+
 def get_envvar_presets(preset=None):
     """
-    Read in the file defining the environmental variable presents.
+    Read in the file defining the environmental variable presets.
 
     :param preset: If given, returns just the section corresponding to that preset. Otherwise, returns the whole config
      object.
     :type preset: str
 
-    :return: the ConfigObj holding all the presents as different sections, or the section of the ConfigObj for the given
+    :return: the ConfigObj holding all the presets as different sections, or the section of the ConfigObj for the given
      preset if ``preset`` is given.
     """
-    presets = ConfigObj(os.path.join(_config_dir, 'Defaults', 'env_var_presets.cfg'))
+    return _get_presets_file(os.path.join(_config_defaults_dir, 'env_var_presets.cfg'), preset=preset)
 
-    if preset is not None:
-        return presets[preset]
-    else:
-        return presets
+
+def get_met_presets(preset=None):
+    """
+    Read in the file defining the meteorology types' namelist option presets.
+
+    :param preset: If given, returns just the section corresponding to that preset. Otherwise, returns the whole config
+     object.
+    :type preset: str
+
+    :return: the ConfigObj holding all the presets as different sections, or the section of the ConfigObj for the given
+     preset if ``preset`` is given.
+    """
+    return _get_presets_file(os.path.join(_config_defaults_dir, 'met_presets.cfg'), preset=preset)
+
+
+def get_chem_presets(preset=None):
+    """
+    Read in the file defining the chemistry mechanisms' namelist option presets.
+
+    :param preset: If given, returns just the section corresponding to that preset. Otherwise, returns the whole config
+     object.
+    :type preset: str
+
+    :return: the ConfigObj holding all the presets as different sections, or the section of the ConfigObj for the given
+     preset if ``preset`` is given.
+    """
+    return _get_presets_file(os.path.join(_config_defaults_dir, 'chem_presets.cfg'), preset=preset)
 
 
 def _check_ncdf_dir(ncdf_dir, causes=None):
@@ -504,6 +558,56 @@ def _file_version(filename):
     version_str = re.search(r'\d+\.\d+\.\d+$', filename).group()
     return parse_version(version_str), version_str
 
+
+def get_selected_core(config_obj=None):
+    """
+    Figure out which WRF core is selected by the current environmental variables
+
+    The ARW core is considered selected if either EM_CORE or WRF_EM_CORE == '1'. The NMM core is considered selected if
+    either NMM_CORE or WRF_NMM_CORE == '1'.
+
+    :param config_obj: the AutoWRFChemConfig object containing the environmental variables. May be omitted, in which
+     case the default one is loaded.
+    :type config_obj: `AutoWRFChemConfig`
+
+    :return: one of the strings 'arw' or 'nmm' indicating which core is selected
+    :rtype: str
+    :raises ConfigurationSettingsError: if either both or neither of the cores are selected.
+    """
+    if config_obj is None:
+        config_obj = AutoWRFChemConfig()
+
+    em_core = config_obj[ENVIRONMENT]['EM_CORE'] == '1' or config_obj[ENVIRONMENT]['WRF_EM_CORE'] == '1'
+    nmm_core = config_obj[ENVIRONMENT]['NMM_CORE'] == '1' or config_obj[ENVIRONMENT]['WRF_NMM_CORE'] == '1'
+
+    if em_core and nmm_core:
+        raise ConfigurationSettingsError('Conflicting settings for the WRF core: both ARW (EM) and NMM selected')
+    elif em_core:
+        return 'arw'
+    elif nmm_core:
+        return 'nmm'
+    else:
+        raise ConfigurationSettingsError('No core (ARW or NMM) selected!')
+
+
+def get_is_chem(config_obj=None):
+    """
+    Check if the env. var. config indicates we are building WRF-Chem
+
+    :param config_obj: the AutoWRFChemConfig object containing the environmental variables. May be omitted, in which
+     case the default one is loaded.
+    :type config_obj: `AutoWRFChemConfig`
+
+    :return: boolean indicating if the WRF_CHEM env. var. is set
+    :rtype: bool
+    """
+    if config_obj is None:
+        config_obj = AutoWRFChemConfig()
+
+    if config_obj[ENVIRONMENT]['WRF_CHEM'] == '1':
+        return True
+    else:
+        return False
 
 ##########################################
 # FUNCTIONS DEALING WITH COMPONENT PATHS #
