@@ -1,17 +1,18 @@
 from __future__ import print_function, absolute_import, division, unicode_literals
 
 from collections import OrderedDict
+import copy
 import datetime as dt
 from glob import glob
 import math
 import os
-import pickle
 import re
+from string import whitespace
 
-from textui import uibuilder as uib, uielements as uiel
+from textui import uielements as uiel, uibuilder as uib
 
 import pdb
-from . import autowrf_consts as awc, config_utils, ENVIRONMENT, WRF_TOP_DIR, WPS_TOP_DIR
+from . import autowrf_consts as awc, config_utils, ENVIRONMENT, WRF_TOP_DIR, WPS_TOP_DIR, _pretty_n_col
 from .. import _config_dir, _config_defaults_dir
 
 # Python 2/3 compatibility: "input()" in Python 3 is like "raw_input()" in Python 2
@@ -48,6 +49,13 @@ class NamelistFormatError(NamelistError):
     pass
 
 
+class NamelistValueError(NamelistError):
+    """
+    Error if an invalid value is given for a namelist option
+    """
+    pass
+
+
 class RegistryError(Exception):
     """
     Base class for all registry related errors
@@ -74,6 +82,43 @@ def msg_print(msg):
         print(msg)
 
 
+###########################################
+# FUNCTIONS TO CHECK NAMELIST INPUT TYPES #
+###########################################
+
+def _is_bool(val):
+    return re.match(r'\.(true|false)\.', val) is not None
+
+
+def _is_int(val):
+    try:
+        int(val)
+    except ValueError:
+        return False
+    else:
+        return True
+
+
+def _is_real(val):
+    try:
+        float(val)
+    except ValueError:
+        return False
+    else:
+        return '.' in val
+
+
+def _is_char(val):
+    return re.match(r"'.*'$", val) is not None
+
+
+_type_checks = {'logical': _is_bool, 'integer': _is_int, 'real': _is_real, 'character': _is_char}
+
+
+####################
+# NAMELIST CLASSES #
+####################
+
 class Namelist(object):
     # These are used to format the output so that the domains are aligned
     opt_field_width = 36
@@ -95,12 +140,25 @@ class Namelist(object):
     # instance as the only argument
     callbacks = dict()
 
+    # extra registry rconfig entries. This dictionary will be used to update the registry dictionary with additional
+    # namelist options. Each value should be a dictionary itself that would result from Registry parsing an rconfig
+    # line. Currently that would have the following key/value pairs:
+    #   'default' - the default value, as a string no matter what type it is. Booleans should be Fortran style, i.e.
+    #     ".true." or ".false."
+    #   'how_set' - a dictionary {'how': 'namelist', 'section': <section>} where <section> is the namelist section the
+    #     option should be found in
+    #   'num_entries' - either '1' or 'max_domains', specifying whether this option is only specified once or per-domain
+    #   'symbol' - the name of the option. Should be the same as the key in the rconfig dict.
+    #   'type' - what (fortran) type this value is. One of "character", "integer", "logical", "real".
+    _extra_registry_entries = {}
+
     @property
     def max_domains(self):
         return int(self.GetOptValNoSect('max_dom')[0])
 
     def __init__(self, namelist_file, registry):
-        self._registry = registry
+        self._registry = copy.deepcopy(registry)
+        self._registry.registry['rconfig'].update(self._extra_registry_entries)
         self.opts = OrderedDict()
         self.ReadNamelist(namelist_file)
 
@@ -194,6 +252,10 @@ class Namelist(object):
 
         return False
 
+    def is_option_per_domain(self, optname):
+        reg_opt = self.lookup_opt_in_registry(optname)
+        return reg_opt['num_entries'] == 'max_domains'
+
     def FindOptSection(self, optname):
         # Returns which section the option is in, or None if not an option
         for sect in self.opts:
@@ -202,6 +264,46 @@ class Namelist(object):
 
         return None
 
+    def match_option_length_to_domains(self, optval, error_if_too_long=False):
+        n_dom = self.max_domains
+        if not isinstance(optval, list):
+            optval = [optval]
+
+        if len(optval) < n_dom:
+            optval += optval[-1:] * (n_dom - len(optval))
+        else:
+            if error_if_too_long and len(optval) > n_dom:
+                raise NamelistValueError('More values given ({}) than domains ({})'.format(len(optval), n_dom))
+            else:
+                optval = optval[:n_dom]
+
+        return optval
+
+    def check_value_type(self, optname, optval):
+        """
+        Check that the values given for a namelist option are of the correct format.
+
+        :param optname: the option name
+        :type optname: str
+
+        :param optval: the option value
+        :type optval: str or list of str
+
+        :return: True if the type is correct, False otherwise. If optval is a list, a list of bools is returned.
+        :rtype: bool or list of bools
+        """
+
+        reg_entry_type = self.lookup_opt_in_registry(optname)['type']
+        try:
+            check_fxn = _type_checks[reg_entry_type]
+        except KeyError:
+            raise NotImplementedError('No check function implemented for registry entry type {}'.format(reg_entry_type))
+
+        if isinstance(optval, list):
+            return [check_fxn(x) for x in optval]
+        else:
+            return check_fxn(optval)
+
     def SetOptVal(self, sectname, optname, vals_in):
         # Currently just assigns the given value to all
         # domains if more than one and not given a list
@@ -209,17 +311,15 @@ class Namelist(object):
         # It's probably that everything actually is a list in the
         # options dict, but this will check anyway.
         # Also convert vals to strings
-        if type(vals_in) is list:
+        if isinstance(vals_in, list):
             vals = [str(v) for v in vals_in]
         else:
             vals = str(vals_in)
 
-        vals = self.MatchOptionQuoting(sectname, optname, vals)
-
         # we'll make sure that we set the right number of options for the maximum number of domains
-        n_domains = self.max_domains
+        n_domains = self.max_domains if self.is_option_per_domain(optname) else 1
 
-        if type(vals) is list:
+        if isinstance(vals, list):
             if len(vals) < n_domains:
                 raise NamelistFormatError('Too few values given for "{opt}" in "{sect}". {n} values given; '
                                           '{n_dom} domains requested.'.format(opt=optname, sect=sectname, n=len(vals),
@@ -227,8 +327,8 @@ class Namelist(object):
 
             self.opts[sectname][optname] = vals
         else:
-            vals = [vals] * n_domains
-            if type(self.opts[sectname][optname]) is list:
+            vals = self.match_option_length_to_domains(vals)
+            if isinstance(self.opts[sectname][optname], list):
                 self.opts[sectname][optname] = vals
             else:
                 raise NotImplementedError('Option value stored in the namelist is not a list!')
@@ -268,23 +368,34 @@ class Namelist(object):
 
         raise KeyError("Could not find the option {0}".format(optname))
 
-    def GetOptVal(self, sectname, optname, domainnum=None):
+    def GetOptVal(self, sectname, optname, domainnum=None, match_n_domains=False):
         # Finds an option by name in "sectname". The optional argument domainnum allows the user to request a single
         # domain's value (1 based)
         if not self.IsOptInSection(sectname, optname):
             raise KeyError("Could not find the option {0}".format(optname))
 
-        if domainnum is not None and type(self.opts[sectname][optname]) is list:
+        val = self.opts[sectname][optname]
+        if not isinstance(val, list):
+            raise NotImplementedError('All namelist values are expected to be lists')
+
+        if match_n_domains and self.is_option_per_domain(optname):
+            val = self.match_option_length_to_domains(val)
+            n_dom = self.max_domains
+
+        if domainnum is not None and self.is_option_per_domain(optname):
+            if domainnum >= len(val):
+                raise NamelistError('Option "{}" in section "{}" ')
             return self.opts[sectname][optname][domainnum-1]
         else:
             return self.opts[sectname][optname]
 
-    def GetOptValNoSect(self, optname, domainnum=None, noquotes=False):
+    def GetOptValNoSect(self, optname, domainnum=None, noquotes=False, match_n_domains=False):
         # Finds an option by name in any section. The optional argument domainnum allows the user to request a single
         # domain's value (1 based). noquotes removes any leading or trailing '
         val = None
         for sect in self.opts:
             if self.IsOptInSection(sect, optname):
+                val = self.GetOptVal(sect, optname, domainnum=domainnum, match_n_domains=match_n_domains)
                 if domainnum is not None and type(self.opts[sect][optname]) is list:
                     val = self.opts[sect][optname][domainnum-1]
                 else:
@@ -308,27 +419,40 @@ class Namelist(object):
 
         return opt.strip() == ".true." or opt.strip() == ".false."
 
+    def lookup_opt_in_registry(self, optname):
+        return self._registry.lookup_reg_entry('rconfig', optname)
+
 
 class WrfNamelist(Namelist):
 
     # Define extra namelist options that don't exist in the registry and whether they need to expand and contract
     # with the number of domains.
     # The NIO options (in &namelist_quilt) are read in by external/RSL_LITE/module_dm.F.
-    _extra_namelist_opt_domains = {'nio_tasks_per_group': True,
-                                   'nio_groups': False}
+    _extra_registry_entries = {'nio_tasks_per_group':
+                                {'default': '0',
+                                 'how_set': {'how': 'namelist', 'section': 'namelist_quilt'},
+                                 'num_entries': 'max_domains',
+                                 'symbol': 'nio_tasks_per_group',
+                                 'type': 'integer'
+                                 },
+                               'nio_groups':
+                                {'default': '1',
+                                 'how_set': {'how': 'namelist', 'section': 'namelist_quilt'},
+                                 'num_entries': '1',
+                                 'symbol': 'nio_groups',
+                                 'type': 'integer'
+                                }
+                               }
 
     # Define additional callback functions in this section, then add them to the following callbacks attribute
     def UpdateOptDomains(self, trim_extra=False):
         n_dom = self.max_domains
         for optval, optname, _ in self.IterOpts():
             try:
-                reg_opt = self._registry.lookup_reg_entry('rconfig', optname)
+                reg_opt = self.lookup_opt_in_registry(optname)
             except KeyError:
-                if optname in self._extra_namelist_opt_domains:
-                    do_expand_with_domains = self._extra_namelist_opt_domains[optname]
-                else:
-                    print('{} not in registry!'.format(optname))
-                    continue
+                print('{} not in registry!'.format(optname))
+                continue
             else:
                 do_expand_with_domains = reg_opt['num_entries'] == 'max_domains'
 
@@ -342,7 +466,7 @@ class WrfNamelist(Namelist):
     callbacks = {'max_dom': UpdateOptDomains}
 
     def __init__(self, namelist_file, registry):
-        Namelist.__init__(self, namelist_file, registry)
+        super(WrfNamelist, self).__init__(namelist_file, registry)
         # Is gfdda_end_h an option in the namelist? If not, we don't need to see if it should be updated with the run
         # time
         self.update_fdda_end = False
@@ -569,9 +693,9 @@ class NamelistContainer:
     # common to both are kept in sync
     my_dir = os.path.dirname(__file__)
     wrf_namelist_outfile = "namelist.input"
-    wrf_namelist_template = os.path.join(_config_defaults_dir, wrf_namelist_outfile + ".template")
+    wrf_namelist_template_base = os.path.join(_config_defaults_dir, wrf_namelist_outfile + ".template")
     wps_namelist_outfile = "namelist.wps"
-    wps_namelist_template = os.path.join(_config_defaults_dir, wps_namelist_outfile + ".template")
+    wps_namelist_template_base = os.path.join(_config_defaults_dir, wps_namelist_outfile + ".template")
     pickle_file = os.path.join(my_dir, "namelist_pickle.pkl")
     cfg_fname = os.path.join(my_dir,"..","wrfbuild.cfg")
     envvar_fname = os.path.join(my_dir,"..","envvar_wrfchem.cfg")
@@ -585,6 +709,15 @@ class NamelistContainer:
                  "start_hour", "start_minute", "start_second", "end_year", "end_month", "end_day", "end_hour",
                  "end_minute", "end_second", "start_date", "end_date"]
 
+    # Options that may not be set directly
+    # TODO: make it so that changing a domain or date opt manually just keeps WRF and WPS in sync, and a met opt issues
+    #  a warning
+    _restricted_opt = domain_opts + date_opts
+
+    @property
+    def wrf_setopt_menu(self):
+        return self._wrf_setopt_menu
+
     def __init__(self, met=None, wrffile=None, wpsfile=None, registry=None):
 
         # Require both namelist files to be given. Will provide separate method to load templates
@@ -594,17 +727,20 @@ class NamelistContainer:
             registry = Registry.load_standard_registry()
 
         self.wrf_namelist = WrfNamelist(wrffile, registry=registry)
-        self.wps_namelist = WpsNamelist(wpsfile, registry=registry)
+        #self.wps_namelist = WpsNamelist(wpsfile, registry=registry) # temporary while I test set opt parsing
 
         # Ensure that the options common to both WRF and WPS are synchronized
-        start_date, end_date = self.wps_namelist.GetTimePeriod()
+        start_date, end_date = self.get_time_period()
         self.wrf_namelist.SetTimePeriod(start_date, end_date)
-        for opt in self.domain_opts:
-            self.wrf_namelist.SetOptValNoSect(opt, self.wps_namelist.GetOptValNoSect(opt))
+        #for opt in self.domain_opts:
+        #    self.wrf_namelist.SetOptValNoSect(opt, self.wps_namelist.GetOptValNoSect(opt))
 
         # Met option will have to be given on the command line
         if met is not None:
             self.set_met(met)
+
+        self._wrf_setopt_menu = self._build_setopt_menu(self.wrf_namelist)
+        #self._wps_setopt_menu = self._build_setopt_menu(self.wps_namelist)
 
     def write_namelists(self, namelist_dir=None, wps_namelist_dir=None, suffix=None):
         """
@@ -715,13 +851,24 @@ class NamelistContainer:
         return cls(wrffile=wrffile, wpsfile=wpsfile)
 
     @classmethod
-    def load_templates(cls):
+    def load_templates(cls, config_obj=None):
         """
         Load the standard namelist template files.
 
         :return: new instance of this class
         """
-        return cls(wrffile=cls.wrf_namelist_template, wpsfile=cls.wps_namelist_template)
+        return cls(wrffile=cls.wrf_namelist_template(config_obj), wpsfile=cls.wps_namelist_template())
+
+    @classmethod
+    def wrf_namelist_template(cls, config_obj=None):
+        if config_utils.get_is_chem(config_obj):
+            return cls.wrf_namelist_template_base + '.chem'
+        else:
+            return cls.wrf_namelist_template_base + '.nochem'
+
+    @classmethod
+    def wps_namelist_template(cls):
+        return cls.wps_namelist_template_base
 
     def set_time_period(self, start_time, end_time):
         """
@@ -914,30 +1061,10 @@ class NamelistContainer:
         else:
             proj_list = self.wps_namelist.allowed_proj
 
-        optval = UI.user_input_list("Choose a map projection: ", proj_list,
-                                    currentvalue=self.wps_namelist.GetOptValNoSect("map_proj", 1, noquotes=True))
+        optval = uiel.user_input_list("Choose a map projection: ", proj_list, printcols=False,
+                                      currentvalue=self.wps_namelist.GetOptValNoSect("map_proj", 1, noquotes=True))
         if optval is not None:
             self.wps_namelist.SetMapProj(optval, neionly)
-
-    def user_set_fdda_end(self):
-        """
-        Set the namelist so that FDDA nudging will be used for the entire model run
-
-        :return: None
-        """
-        whole_run = UI.user_input_yn("Use FDDA nudging for the entire run?")
-        if whole_run:
-            run_hours = self.wrf_namelist.GetRunTime(runtime_unit="hours")
-            run_hours = int(math.ceil(run_hours))
-            self.wrf_namelist.SetOptVal("fdda", "gfdda_end_h", run_hours)
-            self.wrf_namelist.update_fdda_end = True
-            msg_print("gfdda_end_h set to {0}".format(run_hours))
-        else:
-            self.wrf_namelist.update_fdda_end = False
-            optval = UI.user_input_value("gfdda_end_h", currval=self.wrf_namelist.GetOptValNoSect("gfdda_end_h", 1))
-
-            if optval is not None:
-                self.wrf_namelist.SetOptVal("fdda", "gfdda_end_h", optval)
 
     def GetTypeList(self, list_file):
         # TODO: unneeded? or update to work with config files?
@@ -1179,42 +1306,222 @@ class NamelistContainer:
             if not wroteMoz:
                 cfgw.write("mozbcFile=\"{0}\"\n".format(newMozFilename))
 
-    def user_set_other_opt(self, namelist):
-        """
-        Interactively set a namelist option not controlled by a special setter
-
-        :param namelist: the namelist object to modify
-        :type namelist: `Namelist`
-
-        :return: None
-        """
-        # TODO: merge common checks with cmd_set_other_opt
-        sect = UI.user_input_list("Choose the namelist section: ", namelist.opts.keys())
-        if sect is None:
-            return
-
-        k = namelist.opts[sect].keys()
-        if len(k) == 0:
-            msg_print("{0} has no options".format(sect))
-            return
-
-        optslist = [o for o in k if o not in self.domain_opts and o not in self.date_opts]
-        opt = UI.user_input_list("Choose the option to modify: ", optslist)
-        if opt is None:
-            return
-
-        if opt in self.met_opts:
-            msg_print("Note: {0} is usually set by choosing a meteorology type, not directly".format(opt))
-
-        if opt == "map_proj":
-            self.user_set_map_proj()
-        elif opt == "gfdda_end_h":
-            self.user_set_fdda_end()
+    def user_set_opt(self, namelist_name):
+        if namelist_name == 'wrf':
+            uib.Program(self.wrf_setopt_menu, autostart=True)
+        elif namelist_name == 'wps':
+            uib.Program(self.wps_setopt_menu, autostart=True)
         else:
-            optval = UI.user_input_value(opt, isbool=namelist.IsOptBool(sect, opt), currval=namelist.GetOptValNoSect(opt, 1))
+            raise NotImplementedError('No set opt menu defined for namelist_name == "{}"'.format(namelist_name))
 
-            if optval is not None:
-                namelist.SetOptVal(sect, opt, optval)
+    def _user_set_other_opt(self, pgrm_data, namelist, option_name):
+        """
+
+        :type pgrm_data: dict
+        :type namelist: `Namelist`
+        :type option_name: str
+        :return:
+        """
+        opt_type = namelist.lookup_opt_in_registry(option_name)['type']
+        is_per_domain = namelist.is_option_per_domain(option_name)
+
+        def print_help():
+            if opt_type == 'integer':
+                type_help = '{opt} is an integer. Values must be entered as numbers only, no non-numeric characters.'
+                four_dom_ex = ['1', '2', '3', '4']
+            elif opt_type == 'real':
+                type_help = '{opt} is a real number. Values entered must include a decimal point, e.g. "1." or "1.0",' \
+                            ' not just "1".'
+                four_dom_ex = ['1.0', '2.0', '3.0', '4.0']
+            elif opt_type == 'logical':
+                type_help = '{opt} is a logical value. Values must be ".true.", "t", or "T" for true and ".false.", ' \
+                            '"f" or "F" for false.'
+                four_dom_ex = ['.true.', '.true.', '.true.', '.true.']
+            elif opt_type == 'character':
+                type_help = '{opt} is a character value. Values must each be enclosed in single quotes.'
+                four_dom_ex = ["'alpha'", "'beta'", "'gamma'", "'delta'"]
+            else:
+                raise NotImplementedError('type_help not defined for opt type = {}'.format(opt_type))
+
+            help_str = 'All examples assume 4 domains.\n' \
+                       '* Enter values for each domain separated by commas, e.g. "{ex1}".\n' \
+                       '* If you enter fewer values than there are domains, then the last value ' \
+                       'will be repeated (e.g. "{ex2in}" -> "{ex2out}"\n' \
+                       '* You may specify which domains to edit with an @ command at the beginning ' \
+                       'of the value.\n' \
+                       '  - "@1 {ex3a}" would set the first domain only to {ex3a}\n' \
+                       '  - "@1:2 {ex3b}" and "@:2 {ex3b}" would set the first two domains to {ex3b}\n' \
+                       '  - "@3: {ex3c}" and "@3:4 {ex3c}" would set domains 3 and 4 to {ex3c}\n\n'
+            help_str += type_help
+            help_str = help_str.format(opt=option_name, ex1=', '.join(four_dom_ex), ex2in=', '.join(four_dom_ex[:2]),
+                                       ex2out=', '.join(four_dom_ex[:2] + four_dom_ex[1:2]*2),
+                                       ex3a=', '.join(four_dom_ex[:1]), ex3b=', '.join(four_dom_ex[:2]),
+                                       ex3c=', '.join(four_dom_ex[2:]))
+            uiel.user_message(help_str, max_columns=_pretty_n_col, pause=True)
+
+        def check_fxn(user_input):
+            if re.match(r'\s*\?\s*$', user_input):
+                print_help()
+                return False
+
+            try:
+                self._parse_option_input(namelist, option_name, user_input)
+            except NamelistValueError as err:
+                print('Improper value: {}'.format(err.args[0]))
+                return False
+            else:
+                return True
+
+        if option_name in self.date_opts:
+            uiel.user_message('This option must be set through the "Start/end date" option in the main namelist '
+                              'menu', max_columns=_pretty_n_col, pause=True)
+            return
+        elif option_name == 'map_proj':
+            self.user_set_map_proj()
+        # TODO: met opts. Needs to check current config (can use pgrm_data) and if that option has already been changed
+
+        nval = '1 value per domain' if is_per_domain else 'exactly 1 value'
+        prompt = 'Enter value(s) for {opt}, in {type} format. {opt} accepts {nval}. (? for help)'.format(
+            opt=option_name, type=opt_type, nval=nval
+        )
+
+        curr_val = ', '.join(namelist.GetOptValNoSect(option_name))
+        user_val = uiel.user_input_value(prompt, testfxn=check_fxn, testmsg='', currentvalue=curr_val)
+        if user_val is not None:
+            namelist.SetOptValNoSect(option_name, self._parse_option_input(namelist, option_name, user_val))
+
+    def _build_setopt_menu(self, namelist):
+        if isinstance(namelist, WrfNamelist):
+            component = 'WRF'
+        elif isinstance(namelist, WpsNamelist):
+            component = 'WPS'
+        else:
+            component = ''
+
+        def get_namelist_value():
+            pass
+
+        def build_section_menu(section, menu):
+            """
+
+            :type section: dict
+            :type menu: `uibuilder.Menu`
+            :return:
+            """
+            for opt in section:
+                menu.attach_custom_fxn(opt, lambda pgrm_data, nl=namelist, optname=opt: self._user_set_other_opt(pgrm_data, nl, optname))
+
+        setopt_main = uib.Menu('Set {} options: choose namelist section'.format(component),
+                               last_item_name_override='Back')
+
+        for sect_name, sect in namelist.opts.items():
+            new_menu = setopt_main.add_submenu(sect_name)
+            build_section_menu(sect, new_menu)
+
+        return setopt_main
+
+    def _parse_option_input(self, namelist, optname, input_str):
+
+        # To handle multiple domains we need fairly complex logic. The rules are:
+        #   1.  The user enters a comma separated list of values for each domain.
+        #   1a. If the option is not a per domain option, do not allow multiple values to be entered.
+        #   1b. If the option is a per domain option and the user enters fewer values than required, repeat the last
+        #       value to fill out the necessary domains.
+        #   1c. If the option is a per domain option and the user enters too many, do not accept it
+        #
+        #   2.  To change a subset of domains, the user can begin with a "@" value
+        #   2a. The @ gets followed by python slice notation (e.g. 1, 1:, :2, 1:2, :) are all valid. However, the
+        #       indexing is 1-based
+        #   2b. This is ignored if the option is not per-domain
+        #
+        #   3.  Each value gets checked to make sure it is the right format for the type defined in the registry.
+        #   3a. 'logical's must be either .true. or .false.
+        #   3b. 'integer's must be parsable by int()
+        #   3c. 'real's must be parsable by float() and contain a decimal point
+        #   3d. 'character's must be enclosed in single quotes
+
+        ###########################
+        # First get any @ command #
+        ###########################
+
+        at_command = re.compile(r'\s*@\d*:?\d*')
+        at_cmd_match = at_command.match(input_str)
+        if at_cmd_match is not None:
+            # Don't know why, but if I don't include the look-behind for the @, this returns an empty string
+            indices = re.search(r'(?<=@)\d*:?\d*', input_str).group()
+            # A slice object is a programmatic version of the "start:end" notation. Giving it None for the start or
+            # end is like omitting that side of the colon, e.g. slice(None,5) === :5. This list converts the string
+            # representation into arguments for slice.
+            indices = [None if x == '' else int(x)-1 for x in indices.split(':')]
+            if len(indices) == 1:
+                # special case: if no colon, we need to make the slice a one-element one which means the equivalent of
+                # 5:6, since 5:5 is zero-length. Convert from 1-based to 0-based index.
+                xx = slice(indices[0], indices[0]+1)
+            else:
+                if indices[1] is not None:
+                    # Also make the end index inclusive
+                    indices[1] += 1
+                xx = slice(indices[0], indices[1])
+        else:
+            xx = None
+
+        input_str = at_command.sub('', input_str)
+
+        # We'll need to know if this is a per-domain option
+        is_per_domain = namelist.is_option_per_domain(optname)
+
+        # Now split the input into a comma separated list. Ignore leading or trailing commas as well
+        input_str = input_str.strip(whitespace + ',')
+        input_vals = [s.strip() for s in input_str.split(',')]
+
+        #################
+        # Handle slices #
+        #################
+
+        if not is_per_domain and (len(input_vals) != 1 or input_vals[0] == ''):
+            # Check that a single-value option gets exactly one value
+            raise NamelistValueError('{} requires exactly 1 value'.format(optname))
+        elif is_per_domain:
+            if xx is None:
+                # If no "@" command given, then we expand the input values to fill the right number of domains
+                # Still error if too many given
+                input_vals = namelist.match_option_length_to_domains(input_vals, error_if_too_long=True)
+            else:
+                inds = xx.indices(namelist.max_domains)
+                slice_length = len(range(*inds))
+                if len(input_vals) != slice_length:
+                    raise NamelistValueError('{} domain(s) specified to change, but {} values provided'.format(
+                        slice_length, len(input_vals)
+                    ))
+
+        #########################
+        # Check type formatting #
+        #########################
+
+        reg_opt = namelist._registry.lookup_reg_entry('rconfig', optname)
+        # Allow T or F (case insensitive) for logical values.
+        if reg_opt['type'] == 'logical':
+            for i, v in enumerate(input_vals):
+                if v.lower() == 't':
+                    input_vals[i] = '.true.'
+                elif v.lower() == 'f':
+                    input_vals[i] = '.false.'
+
+        good_opts = namelist.check_value_type(optname, input_vals)
+        if not all(good_opts):
+            # Find which domains options were incorrectly formatted
+            slice_start = xx.start if xx is not None else 0
+            bad_inds = [str(i + 1 + slice_start) for i, x in enumerate(good_opts) if not x]
+            raise NamelistValueError('The values for domain(s) {} are the incorrect format for the "{}" type'.format(
+                ', '.join(bad_inds), reg_opt['type']
+            ))
+
+        if xx is None:
+            return input_vals
+        else:
+            new_vals = copy.copy(namelist.GetOptValNoSect(optname, match_n_domains=True))
+            new_vals[xx] = input_vals
+            return new_vals
 
     def display_options(self, namelist):
         """
@@ -1376,44 +1683,6 @@ class NamelistContainer:
                 raise RuntimeError("{0} is a boolean value and so can only be give the value .true. or .false.".format(optname))
             namelist.SetOptVal(sect, optname, optval)
 
-    def UserMenu(self):
-        # TODO: extract from this class
-        # Present a menu to let the user modify the namelist once. So this should be called from a while loop to allow
-        # user to modify mulitple options. Returns True or False, False if the user has requested to exit.
-        prmpt = "Choose what to modify or do:"
-        opts = ["Start/end date", "Domain (common opts only)", "Meterology", "Chemistry", "Other WRF options",
-                "Other WPS options", "Check for NEI compatibility", "Select MOZBC file", "Display WRF options",
-                "Display WPS options", "Save and exit"]
-        sel = UI.user_input_list(prmpt, opts, returntype="index", emptycancel=False)
-        if sel == 0:
-            self.user_set_time_period()
-        elif sel == 1:
-            self.user_set_domain() # Note that this only sets the options SHARED between WRF and WPS
-        elif sel == 2:
-            self.user_set_met()
-        elif sel == 3:
-            self.user_set_chem()
-        elif sel == 4:
-            self.user_set_other_opt(self.wrf_namelist)
-        elif sel == 5:
-            self.user_set_other_opt(self.wps_namelist)
-        elif sel == 6:
-            self.user_nei_compat_check()
-        elif sel == 7:
-            NamelistContainer.UserSetMozFile()
-        elif sel == 8:
-            self.display_options(self.wrf_namelist)
-        elif sel == 9:
-            self.display_options(self.wps_namelist)
-        elif sel == 10:
-            return False
-
-        return True
-
-    def edit_main_menu(self):
-        pass
-
-  
 
 class Registry(object):
     """

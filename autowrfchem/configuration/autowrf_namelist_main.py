@@ -17,7 +17,7 @@ def NamelistsPath():
     return os.path.join(MyPath(), "NAMELISTS")
 
 
-wrf_namelist_template_file = os.path.join(MyPath(), "namelist.input.template")
+wrf_namelist_template_file = os.path.join(MyPath(), "namelist.input.template.chem")
 wps_namelist_template_file = os.path.join(MyPath(), "namelist.wps.template")
 
 
@@ -64,7 +64,7 @@ def SelectPreexistingNamelists():
 def load_menu(pgrm_data, loadmethod):
     nlcon = None
     if loadmethod == 'templates':
-        nlcon = WRF.NamelistContainer.load_templates()
+        nlcon = WRF.NamelistContainer.load_templates(config_obj=pgrm_data[_pgrm_cfg_key])
     elif loadmethod == 'preexisting':
         wrffile, wpsfile = SelectPreexistingNamelists()
         if wrffile is not None and wpsfile is not None:
@@ -271,12 +271,7 @@ def _restore_met_opts(pgrm_data):
 
 def _set_other_opt(pgrm_data, namelist_name):
     nlc = pgrm_data[_pgrm_nl_key]
-    if namelist_name == 'wrf':
-        nlc.user_set_other_opt(nlc.wrf_namelist)
-    elif namelist_name == 'wps':
-        nlc.user_set_other_opt(nlc.wps_namelist)
-    else:
-        raise NotImplementedError('namelist_name == "{}"'.format(namelist_name))
+    nlc.user_set_opt(namelist_name)
 
 
 def _display_opts(pgrm_data, namelist_name):
@@ -649,7 +644,7 @@ if __name__ == "__main__":
 #   through your choice of met data.
 #
 #   When loading namelists, you are given three options:
-#       1) Load standard templates: this reads the namelist.input.template and namelist.wps.template files in
+#       1) Load standard templates: this reads the namelist.input.template.chem and namelist.wps.template files in
 #       $MYDIR.
 #       These are configured to support NEI, MEGAN, and MOZBC immediately and use RADM2 chemistry.
 #

@@ -137,7 +137,7 @@ class AutoWRFChemConfig(ConfigObj):
         self._read_from_defaults = config_file == self._default_config_file
         if not self._read_from_defaults:
             self._check_all_opts_present()
-            
+
         self._original_values = deepcopy(self.dict())
 
     @classmethod
