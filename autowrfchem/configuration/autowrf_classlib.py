@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import, division, unicode_litera
 from collections import OrderedDict
 import copy
 import datetime as dt
+import f90nml
 from glob import glob
 import math
 import os
@@ -718,29 +719,31 @@ class NamelistContainer:
     def wrf_setopt_menu(self):
         return self._wrf_setopt_menu
 
-    def __init__(self, met=None, wrffile=None, wpsfile=None, registry=None):
+    def __init__(self, met=None, wrffile=None, wpsfile=None, wrf_registry=None, wps_registry=None):
 
         # Require both namelist files to be given. Will provide separate method to load templates
         if wrffile is None or wpsfile is None:
             raise NamelistReadingError('Must give both a WRF and WPS namelist file')
-        if registry is None:
-            registry = Registry.load_standard_registry()
+        if wrf_registry is None:
+            wrf_registry = Registry.load_standard_registry()
+        if wps_registry is None:
+            wps_registry = WPSPseudoRegistry.load_standard_registry()
 
-        self.wrf_namelist = WrfNamelist(wrffile, registry=registry)
-        #self.wps_namelist = WpsNamelist(wpsfile, registry=registry) # temporary while I test set opt parsing
+        self.wrf_namelist = WrfNamelist(wrffile, registry=wrf_registry)
+        self.wps_namelist = WpsNamelist(wpsfile, registry=wps_registry)
 
         # Ensure that the options common to both WRF and WPS are synchronized
         start_date, end_date = self.get_time_period()
         self.wrf_namelist.SetTimePeriod(start_date, end_date)
-        #for opt in self.domain_opts:
-        #    self.wrf_namelist.SetOptValNoSect(opt, self.wps_namelist.GetOptValNoSect(opt))
+        for opt in self.domain_opts:
+            self.wrf_namelist.SetOptValNoSect(opt, self.wps_namelist.GetOptValNoSect(opt))
 
         # Met option will have to be given on the command line
         if met is not None:
             self.set_met(met)
 
         self._wrf_setopt_menu = self._build_setopt_menu(self.wrf_namelist)
-        #self._wps_setopt_menu = self._build_setopt_menu(self.wps_namelist)
+        self._wps_setopt_menu = self._build_setopt_menu(self.wps_namelist)
 
     def write_namelists(self, namelist_dir=None, wps_namelist_dir=None, suffix=None):
         """
@@ -1729,34 +1732,21 @@ class Registry(object):
         """
         Load the standard registry file from the WRF directory defined in the configuration.
 
-        This tries to find $WRF_TOP_DIR/Registry/Registry first. If it cannot find that, it looks for either
-        $WRF_TOP_DIR/Registry/Registry.EM or $WRF_TOP_DIR/Registry/Registry.NMM depending on which WRF core is selected.
+        This looks for $WRF_TOP_DIR/Registry/Registry.
 
         :param kwargs: Additional keyword arguments to pass through to the class __init__ function.
 
         :return: new instance of the Registry class.
         :rtype: `Registry`.
+        :raises RegistryIOError: if the registry file does not exist
         """
         config_obj = config_utils.AutoWRFChemConfig()
         wrf_reg_dir = os.path.join(config_utils.get_wrf_top_dir(config_obj), 'Registry')
 
-        tested_reg_files = ['Registry']
-        std_reg_file = os.path.join(wrf_reg_dir, tested_reg_files[-1])
+        std_reg_file = os.path.join(wrf_reg_dir, 'Registry')
 
         if not os.path.isfile(std_reg_file):
-            # Possible that we don't have the Registry file because Registry.EM or Registry.NMM are copied to Registry
-            # in the compile script.
-            wrf_core = config_utils.get_selected_core(config_obj)
-            if wrf_core == 'arw':
-                tested_reg_files.append(['Registry.EM'])
-            elif wrf_core == 'nmm':
-                tested_reg_files.append(['Registry.NMM'])
-
-            print('Cannot find Registry file, looking for {}'.format(tested_reg_files[-1]))
-            std_reg_file = os.path.join(wrf_reg_dir, tested_reg_files[-1])
-            raise RegistryIOError('Cannot find either standard registry file ({}) in {}.\n'.format(
-                ' or '.join(std_reg_file), wrf_reg_dir
-            ))
+            raise RegistryIOError('Cannot find standard registry file ({})'.format(std_reg_file))
 
         return cls(std_reg_file, config_obj, **kwargs)
 
@@ -2022,169 +2012,65 @@ class Registry(object):
             return entries
 
 
-class UI:
-    def __init__(self):
-        pass
+class WPSPseudoRegistry(Registry):
+    def _parse_reg_file(self, reg_file):
+        """
+        Parse the WPS "all_options" namelist as a pseudo registry
 
-    @staticmethod
-    def user_input_list(prompt, options, returntype="value", currentvalue=None, emptycancel=True):
-        # Method will give the user their list of options, sequentially numbered, and ask them to chose one. It will
-        # ensure that the selection is in the permissible range and return, by default, the value selected. The keyword
-        # argument "returntype" can be set to "index" to have this function return the index within the list options
-        # rather than the value. The keyword currentvalue can be used to mark which option is currently selected
-        # Returns None if the user enters an empty value to abort
+        :param reg_file: the path to the namelist.wps.all_options file
+        :type reg_file: str
 
-        # Input checking
-        if type(prompt) is not str:
-            raise TypeError("PROMPT must be a string")
-        if type(options) is not list and type(options) is not tuple:
-            raise TypeError("OPTIONS must be a list or tuple")
-        if type(returntype) is not str or returntype.lower() not in ["value", "index"]:
-            raise TypeError("RETURNTYPE must be one of the strings 'value' or 'index'")
-
-        print(prompt)
-        if emptycancel:
-            print("A empty answer will cancel.")
-        if currentvalue is not None:
-            print("The current value is marked with a *")
-        for i in range(1, len(options)+1):
-            if currentvalue is not None and options[i-1] == currentvalue:
-                currstr = "*"
-            else:
-                currstr = " "
-            print("  {2}{0}: {1}".format(i, options[i-1], currstr))
-
-        while True:
-            userans = input("Enter 1-{0}: ".format(len(options)))
-            if len(userans) == 0:
-                return None
-
-            try:
-                userans = int(userans)
-            except ValueError:
-                print("Input invalid")
-            else:
-                if userans > 0 and userans <= len(options):
-                    break
-
-        if returntype.lower() == "value":
-            return options[userans-1]
-        elif returntype.lower() == "index":
-            return userans - 1
-        else:
-            raise ValueError("Value '{0}' for keyword 'returntype' is not recognized".format(returntype))
-
-    @staticmethod
-    def user_input_date(prompt, currentvalue=None):
-        # Prompts the user for a date in yyyy-mm-dd or yyyy-mm-dd HH:MM:SS format. Only input is a prompt describing
-        # what the date is. Returns a datetime object. The currentvalue keyword can be used to display the current
-        # setting, but it must be a datetime object as well. Returns none if user ever enters an empty string.
-        if currentvalue is not None and type(currentvalue) is not dt.datetime:
-            raise TypeError("If given, currentvalue must be a datetime object")
-
-        print(prompt)
-        print("Enter in the format yyyy-mm-dd or yyyy-dd-mm HH:MM:SS")
-        print("i.e. both 2016-04-01 and 2016-04-01 00:00:00 represent midnight on April 1st, 2016")
-        print("Entering nothing will cancel")
-        if currentvalue is not None:
-            print("Current value is {0}".format(currentvalue))
-
-        while True:
-            userdate = input("--> ")
-            userdate = userdate.strip()
-            if len(userdate) == 0:
-                return None
-
-            date_and_time = userdate.split(" ")
-            date_and_time = [s.strip() for s in date_and_time]
-            if len(date_and_time) == 1:
-                # No time passed, set to midnight
-                hour = 0
-                min = 0
-                sec = 0
-            else:
-                time = date_and_time[1].split(':')
-                if len(time) != 3:
-                    print('Time component must be of form HH:MM:SS (three 2-digit numbers separated by colons')
-                    continue
-
-                try:
-                    hour = int(time[0])
-                    min = int(time[1])
-                    sec = int(time[2])
-                except ValueError:
-                    print("Error parsing time. Be sure only numbers 0-9 are used to define HH, MM, and SS")
-                    continue
-
-            date = date_and_time[0].split("-")
-            if len(date) != 3:
-                print("Date component must be of form yyyy-mm-dd (4-, 2-, and 2- digits separated by dashed")
-                continue
-
-            try:
-                yr = int(date[0])
-                mn = int(date[1])
-                dy = int(date[2])
-            except ValueError:
-                print("Error parsing date. Be sure only numbers 0-9 are used to define yyyy, mm, and dd.")
-                continue
-
-            # Take advantage of datetime's built in checking to be sure we have a valid date
-            try:
-                dateout = dt.datetime(yr,mn,dy,hour,min,sec)
-            except ValueError as e:
-                print("Problem with date/time entered: {0}".format(str(e)))
-                continue
-
-            # If we get here, nothing went wrong
-            return dateout
-
-    @staticmethod
-    def user_input_value(optname, isbool=False, currval=None, noempty=False):
-        # Allows user to input a value simply. The isbool keyword input allows this function to behave differently if
-        # the option is a boolean, since those options must be given as .true. or .false.
-        # As with others, a value for currval will print the current value
-        # Returns None if no value given
-        print("Enter a new value for {0}".format(optname))
-        if currval is not None:
-            print("The current value is {0}".format(currval))
-
-        while True:
-            if isbool:
-                userans = input("T/F: ").lower().strip()
-                if userans == "t":
-                    return ".true."
-                elif userans == "f":
-                    return ".false."
-                elif len(userans) == 0:
-                    return None
+        :return: a dictionary with the 'rconfig' entry type section containing the WPS entry types
+        """
+        all_opts_nl = f90nml.read(reg_file)
+        default_n_dom = all_opts_nl['share']['max_dom']
+        nl_dict = dict()
+        for sect_name, section in all_opts_nl.items():
+            for opt_name, opt_val in section.items():
+                default_val = opt_val[0] if isinstance(opt_val, list) else opt_val
+                opt_dict = dict()
+                opt_dict['default'] = default_val
+                opt_dict['how_set'] = {'how': 'namelist', 'section': sect_name}
+                if isinstance(opt_val, list):
+                    if len(opt_val) == default_n_dom:
+                        opt_dict['num_entries'] = 'max_domains'
+                    else:
+                        opt_dict['num_entries'] = 'multiple'
                 else:
-                    print("Option is a boolean. Must enter T or F.")
-            else:
-                userans = input("--> ").strip()
-                if len(userans) == 0 and not noempty:
-                    return None
-                elif len(userans) == 0 and noempty:
-                    print("Cannot enter an empty value.")
+                    opt_dict['num_entries'] = '1'
+                opt_dict['symbol'] = opt_name
+                if isinstance(default_val, bool):
+                    opt_dict['type'] = 'logical'
+                elif isinstance(default_val, int):
+                    opt_dict['type'] = 'integer'
+                elif isinstance(default_val, float):
+                    opt_dict['type'] = 'real'
+                elif isinstance(default_val, str):
+                    opt_dict['type'] = 'character'
                 else:
-                    return userans
+                    raise NotImplementedError('No fortran type defined for WPS value of type {}'.format(
+                        type(default_val).__name__
+                    ))
+                nl_dict[opt_name] = opt_dict
 
-    @staticmethod
-    def user_input_yn(prompt, default="y"):
-        while True:
-            if default in "Yy":
-                defstr = " [y]/n"
-                defaultans = True
-            else:
-                defstr = " y/[n]"
-                defaultans = False
-            userans = input(prompt + defstr + ": ")
+        return {'rconfig': nl_dict}
 
-            if userans == "":
-                return defaultans
-            elif userans.lower() == "y":
-                return True
-            elif userans.lower() == "n":
-                return False
-            else:
-                print("Enter y or n only. ", end="")
+    @classmethod
+    def load_standard_registry(cls, **kwargs):
+        """
+        Load the standard namelist.wps.all_options file form the WPS directory defined in the configuration
+
+        This looks for $WPS_TOP_DIR/namelist.wps.all_options
+
+        :param kwargs: Additional keyword arguments to pass through to the class __init__ function.
+
+        :return: new instance of the WPSPseudoRegistry class
+        :rtype: `WPSPseudoRegistry`
+        :raises RegistryIOError: if the namelist.wps.all_options file does not exist
+        """
+        config_obj = config_utils.AutoWRFChemConfig()
+        std_reg_file = os.path.join(config_utils.get_wps_top_dir(config_obj), 'namelist.wps.all_options')
+        if not os.path.isfile(std_reg_file):
+            raise RegistryIOError('Cannot find standard all options WPS namelist ({})'.format(std_reg_file))
+
+        return cls(std_reg_file, config_obj, **kwargs)

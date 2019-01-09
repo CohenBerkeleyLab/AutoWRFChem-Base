@@ -32,4 +32,4 @@ def get_wrf_namelist(with_chem=False):
 
 
 def get_namelist_container(with_chem=False):
-    return awclib.NamelistContainer(wrffile=_wrf_nl(with_chem), wpsfile=_wps_nl(), registry=get_registry())
+    return awclib.NamelistContainer(wrffile=_wrf_nl(with_chem), wpsfile=_wps_nl(), wrf_registry=get_registry())
