@@ -5,8 +5,9 @@ import subprocess
 
 from textui import uibuilder as uib, uielements as uiel
 
-from . import  _pgrm_main_check_key, _pgrm_cfg_key, _pgrm_clargs_key, _pgrm_warn_to_choose_env, _pretty_n_col, \
-    config_utils as cu, autowrf_namelist_main as awnlmain, ENVIRONMENT, AUTOMATION
+from . import  _pgrm_main_check_key, _pgrm_cfg_key, _pgrm_clargs_key, _pgrm_warn_to_choose_env, _pgrm_nl_key,\
+    _pretty_n_col, ENVIRONMENT, AUTOMATION
+from . import config_utils as cu, autowrf_classlib as awclib, autowrf_namelist_main as awnlmain
 
 _preset_fxns = {'get_netcdf_dir()': cu.get_ncdf_dir,
                 'get_yacc_exec()': cu.get_yacc_exec,
@@ -390,6 +391,13 @@ def drive_configuration(**cl_args):
     config_pgrm.data[_pgrm_cfg_key] = config_obj
     config_pgrm.data[_pgrm_clargs_key] = cl_args
     config_pgrm.data[_pgrm_warn_to_choose_env] = True
+    try:
+        # Try reading the standard namelists if they exist. If not then the user will have to choose how to load the
+        # namelists in the menu
+        config_pgrm.data[_pgrm_nl_key] = awclib.NamelistContainer.load_namelists()
+    except awclib.NamelistReadingError:
+        pass
+
     #pdb.set_trace()
     config_pgrm.main_loop()
 

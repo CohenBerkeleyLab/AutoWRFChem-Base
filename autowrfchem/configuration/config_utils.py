@@ -292,8 +292,12 @@ def get_met_presets(preset=None):
 
     :return: the ConfigObj holding all the presets as different sections, or the section of the ConfigObj for the given
      preset if ``preset`` is given.
+    :raises ConfigurationLoadError: if the requested preset cannot be found.
     """
-    return _get_presets_file(os.path.join(_config_defaults_dir, 'met_presets.cfg'), preset=preset)
+    try:
+        return _get_presets_file(os.path.join(_config_defaults_dir, 'met_presets.cfg'), preset=preset)
+    except KeyError:
+        raise ConfigurationLoadError('Requested met type "{}" is not defined'.format(preset))
 
 
 def get_chem_presets(preset=None):

@@ -9,6 +9,7 @@ automation_top_dir = os.path.abspath(os.path.join(_pkg_dir, '..'))
 
 _config_dir = os.path.abspath(os.path.join(_pkg_dir, '..', 'CONFIG'))
 _config_defaults_dir = os.path.join(_config_dir, 'Defaults')
+_namelists_dir = os.path.join(_config_dir, 'NAMELISTS')
 _wrf_dir_default = os.path.abspath(os.path.join(_pkg_dir, '..', 'WRFV3'))
 
 

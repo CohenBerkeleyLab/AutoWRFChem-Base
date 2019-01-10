@@ -9,7 +9,7 @@ from ..configuration import autowrf_classlib as awclib
 
 class TestNamelistSetOptions(unittest.TestCase):
     def setUp(self):
-        self.nlc = stu.get_namelist_container()
+        self.nlc = stu.get_namelist_container(sync='wrf')
         if self.nlc.wrf_namelist.max_domains != 4:
             raise ValueError('Testing expects a WRF namelist with 4 domains')
 
@@ -90,6 +90,38 @@ class TestNamelistSetOptions(unittest.TestCase):
         """
         with self.assertRaisesRegex(awclib.NamelistValueError, r'More values given \(\d+\) than domains \(\d+\)'):
             self.nlc._parse_option_input(self.nlc.wrf_namelist, 'e_we', '1,2,3,4,5,6,7,8')
+
+    def test_nlc_sync_vars(self):
+        """
+        Test that all expected variables synchronize between WRF and WPS namelists properly
+        """
+        nlc = stu.get_namelist_container(sync='no sync')
+
+        def check_opt_is_different(opt):
+            wrf_opt = nlc.wrf_namelist.GetOptValNoSect(opt)
+            wps_opt = nlc.wps_namelist.GetOptValNoSect(opt)
+            if wrf_opt == wps_opt:
+                raise RuntimeError('{} already the same in WRF and WPS namelists - test will not work'.format(opt))
+
+        all_test_opts = nlc.sync_options
+        check_opt_is_different('max_dom')   # to really test this, we want the namelists to have different numbers of
+                                            # domains to begin with
+        for opt in all_test_opts:
+            check_opt_is_different(opt)
+
+        for opt in all_test_opts:
+            wrf_val = nlc.wrf_namelist.GetOptValNoSect(opt)
+            wps_val = nlc.wps_namelist.GetOptValNoSect(opt)
+
+            nlc_test = stu.get_namelist_container(sync='wrf')
+            with self.subTest(opt=opt, direction='wrf -> wps'):
+                self.assertEqual(nlc_test.wrf_namelist.GetOptValNoSect(opt), wrf_val)
+                self.assertEqual(nlc_test.wps_namelist.GetOptValNoSect(opt), wrf_val)
+
+            nlc_test = stu.get_namelist_container(sync='wps')
+            with self.subTest(opt=opt, direction='wps -> wrf'):
+                self.assertEqual(nlc_test.wrf_namelist.GetOptValNoSect(opt), wps_val)
+                self.assertEqual(nlc_test.wps_namelist.GetOptValNoSect(opt), wps_val)
 
 
 if __name__ == '__main__':

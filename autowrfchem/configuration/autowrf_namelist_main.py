@@ -5,16 +5,14 @@ import datetime as dt
 
 from textui import uibuilder as uib, uielements as uiel, uierrors
 
-from . import _pretty_n_col, _pgrm_cfg_key, config_utils, AUTOMATION, MET_TYPE, autowrf_classlib as WRF
-from .autowrf_classlib import UI
+from . import _pretty_n_col, _pgrm_cfg_key, _pgrm_nl_key, config_utils, AUTOMATION, MET_TYPE
+from . import autowrf_classlib as WRF
+from .. import _namelists_dir
 import pdb
+
 
 def MyPath():
     return os.path.dirname(os.path.abspath(__file__))
-
-
-def NamelistsPath():
-    return os.path.join(MyPath(), "NAMELISTS")
 
 
 wrf_namelist_template_file = os.path.join(MyPath(), "namelist.input.template.chem")
@@ -24,16 +22,16 @@ wps_namelist_template_file = os.path.join(MyPath(), "namelist.wps.template")
 def Startup():
     # Check if the NAMELISTS subfolder exists already,
     # create it if not
-    if not os.path.isdir(NamelistsPath()):
-        os.mkdir(NamelistsPath())
+    if not os.path.isdir(_namelists_dir):
+        os.mkdir(_namelists_dir)
 
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
-def SelectPreexistingNamelists():
-    files = os.listdir(NamelistsPath())
+def select_preexisting_namelists(config_obj):
+    files = os.listdir(_namelists_dir)
     template_name = "Standard template"
     wrffiles = [template_name]
     wpsfiles = [template_name]
@@ -43,40 +41,49 @@ def SelectPreexistingNamelists():
         elif f.startswith("namelist.wps"):
             wpsfiles.append(f)
 
-    # If the namelist container is given a None for the file, it will load the standard template
-
-    print("Select the namelist files to use. If there is a discrepancy in the domain, the WPS file")
-    print("takes precedence.")
-    wrffile = UI.user_input_list("Choose the WRF namelist: ", wrffiles)
+    wrffile = uiel.user_input_list("Choose the WRF namelist: ", wrffiles)
     if wrffile == template_name:
-        wrffile = wrf_namelist_template_file
+        wrffile = WRF.NamelistContainer.wrf_namelist_template(config_obj)
     elif wrffile is not None:
-        wrffile = os.path.join(NamelistsPath(), wrffile)
+        wrffile = os.path.join(_namelists_dir, wrffile)
 
-    wpsfile = UI.user_input_list("Choose the WPS namelist: ", wpsfiles)
+    wpsfile = uiel.user_input_list("Choose the WPS namelist: ", wpsfiles)
     if wpsfile == template_name:
-        wpsfile = wps_namelist_template_file
+        wpsfile = WRF.NamelistContainer.wps_namelist_template()
     elif wpsfile is not None:
-        wpsfile = os.path.join(NamelistsPath(), wpsfile)
+        wpsfile = os.path.join(_namelists_dir, wpsfile)
 
     return wrffile, wpsfile
 
+
 def load_menu(pgrm_data, loadmethod):
+    config_obj = pgrm_data[_pgrm_cfg_key]
     nlcon = None
-    if loadmethod == 'templates':
-        nlcon = WRF.NamelistContainer.load_templates(config_obj=pgrm_data[_pgrm_cfg_key])
-    elif loadmethod == 'preexisting':
-        wrffile, wpsfile = SelectPreexistingNamelists()
-        if wrffile is not None and wpsfile is not None:
-            nlcon = WRF.NamelistContainer(wrffile=wrffile, wpsfile=wpsfile)
-    elif loadmethod == 'current':
-        if _pgrm_nl_key in pgrm_data:
-            if not uiel.user_input_yn('This will revert to the previous saved version. Continue?'):
-                return
-        nlcon = WRF.NamelistContainer.load_namelists()
+
+    try:
+        if loadmethod == 'templates':
+            nlcon = WRF.NamelistContainer.load_templates(config_obj=config_obj)
+        elif loadmethod == 'preexisting':
+            wrffile, wpsfile = select_preexisting_namelists(config_obj)
+            if wrffile is not None and wpsfile is not None:
+                nlcon = WRF.NamelistContainer(wrffile=wrffile, wpsfile=wpsfile)
+            else:
+                raise WRF.NamelistReadingError('')
+        elif loadmethod == 'current':
+            if _pgrm_nl_key in pgrm_data:
+                if not uiel.user_input_yn('This will revert to the previous saved version. Continue?'):
+                    return
+
+            nlcon = WRF.NamelistContainer.load_namelists()
+    except WRF.NamelistReadingError as err:
+        uiel.user_message('Problem reading namelist file: {}.\nTry another method of loading'.format(err.args[0]),
+                          max_columns=_pretty_n_col, pause=True)
+        return
 
     if nlcon is not None:
         pgrm_data[_pgrm_nl_key] = nlcon
+    else:
+        uiel.user_message('Failed to load namelist', pause=True)
 
 
 def PrintHelp(markstring):
@@ -114,13 +121,13 @@ def SaveMenu(nlc):
     elif sel == 2:
         while True:
             suffix = UI.user_input_value("suffix", noempty=True)
-            if os.path.isfile(os.path.join(NamelistsPath(),"namelist.input.{0}".format(suffix))) or os.path.isfile(os.path.join(NamelistsPath(),"namelist.wps.{0}".format(suffix))):
+            if os.path.isfile(os.path.join(_namelists_dir,"namelist.input.{0}".format(suffix))) or os.path.isfile(os.path.join(_namelists_dir,"namelist.wps.{0}".format(suffix))):
                 if UI.user_input_yn("{0} is already used. Overwrite?".format(suffix), default="n"):
                     break
             else:
                 break
 
-        nlc.write_namelists(namelist_dir=NamelistsPath(), suffix=suffix)
+        nlc.write_namelists(namelist_dir=_namelists_dir, suffix=suffix)
 
         userans = input("Do you also write to make these the current namelist? y/[n]: ")
         if userans.lower() == "y":
@@ -228,6 +235,28 @@ def _registry_not_ready(pgrm_data):
         return False
 
 
+def _save_namelists(pgrm_data):
+    nlc = pgrm_data[_pgrm_nl_key]
+    save_regular = 'Save namelists'
+    save_temp = 'Save temporary changes to namelists'
+    save_later = 'Save namelists for later'
+    discard = 'Discard changes'
+    cancel = 'Make further changes'
+    action = uiel.user_input_list('Save changes to namelists', [save_regular, save_temp, save_later, discard, cancel],
+                                  printcols=False, emptycancel=False)
+
+    if action == save_regular:
+        nlc.save_namelists(save_mode='both')
+    elif action == save_temp:
+        nlc.save_namelists(save_mode='temp')
+    elif action == save_later:
+        _save_namelists_for_later(nlc)
+    elif action == discard:
+        return True
+    elif action == cancel:
+        return False
+
+
 def _namelist_not_loaded(pgrm_data):
     """
     Checks if a namelist has been loaded yet
@@ -242,6 +271,19 @@ def _namelist_not_loaded(pgrm_data):
 
 def _is_not_wrf_chem(pgrm_data):
     return not config_utils.get_is_chem(pgrm_data[_pgrm_cfg_key])
+
+
+def _save_namelists_for_later(nlc):
+    while True:
+        suffix = uiel.user_input_value("Enter an identifying suffix", emptycancel=False)
+        if os.path.isfile(os.path.join(_namelists_dir, "namelist.input.{0}".format(suffix))) or os.path.isfile(
+                os.path.join(_namelists_dir, "namelist.wps.{0}".format(suffix))):
+            if uiel.user_input_yn("{0} is already used. Overwrite?".format(suffix), currentvalue="n"):
+                break
+        else:
+            break
+
+    nlc.write_namelists(namelist_dir=_namelists_dir, suffix=suffix)
 
 
 ###########################
@@ -271,7 +313,7 @@ def _restore_met_opts(pgrm_data):
 
 def _set_other_opt(pgrm_data, namelist_name):
     nlc = pgrm_data[_pgrm_nl_key]
-    nlc.user_set_opt(namelist_name)
+    nlc.user_set_opt(namelist_name, pgrm_data=pgrm_data)
 
 
 def _display_opts(pgrm_data, namelist_name):
@@ -300,9 +342,8 @@ def _choose_met_type(pgrm_data):
 
     selected_met = uiel.user_input_list('Choose a met type', met_names, currentvalue=current_met)
     if selected_met is not None:
-        config_obj[AUTOMATION][MET_TYPE] = selected_met
         nlc = pgrm_data[_pgrm_nl_key]
-        nlc.set_met(selected_met)
+        nlc.set_met(selected_met, config_obj=config_obj, update_config=True)
 
 
 def _set_chem_mechanism(pgrm_data):
@@ -329,8 +370,8 @@ def _choose_mozbc_file(pgrm_data):
 ##############################
 # NAMELIST MENU CONSTRUCTION #
 ##############################
-_pgrm_nl_key = 'namelists'
-namelist_main = uib.Menu('Namelists', enter_hook=_registry_not_ready)
+namelist_main = uib.Menu('Namelists', enter_hook=_registry_not_ready, exit_hook=_save_namelists,
+                         last_item_name_override='{} & save namelists')
 
 loading_menu = namelist_main.add_submenu('Load different namelists', auto_exit=True)
 loading_menu.attach_custom_fxn('Load/reload existing namelists', lambda pgrm_data: load_menu(pgrm_data, 'current'))
@@ -418,8 +459,8 @@ if __name__ == "__main__":
                     if suffix is not None:
                         wrffname = WRF.NamelistContainer.wrf_namelist_outfile + "." + suffix
                         wpsfname = WRF.NamelistContainer.wps_namelist_outfile + "." + suffix
-                        wrffile = os.path.join(NamelistsPath(), wrffname)
-                        wpsfile = os.path.join(NamelistsPath(), wpsfname)
+                        wrffile = os.path.join(_namelists_dir, wrffname)
+                        wpsfile = os.path.join(_namelists_dir, wpsfname)
                         nlc = WRF.NamelistContainer(met=metopt, wrffile=wrffile, wpsfile=wpsfile)
                     else:
                         nlc = WRF.NamelistContainer(met=metopt, wrffile=wrf_namelist_template_file,
