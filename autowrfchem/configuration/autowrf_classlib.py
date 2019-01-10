@@ -329,19 +329,12 @@ class Namelist(object):
         self.opts = f90nml.read(namelist_file)
 
     def write_namelist(self, out_filename):
-        # If the output file already exists, assume the may be comments or whatnot that we want to preserve, so use
-        # the patch functionality. Otherwise, we can just write the namelist normally.
+        # TODO: find a way to preserve comments
+        # Have had some very weird behavior when trying to patch namelists, so for now we just overwrite them each
+        # time
         if os.path.isfile(out_filename):
-            out_dir = os.path.dirname(out_filename)
-            fid, tmp_file = tempfile.mkstemp(dir=out_dir)
-            os.close(fid)
-
-            f90nml.patch(out_filename, self.opts, tmp_file)
-            os.rename(tmp_file, out_filename)
-        else:
-            if os.path.isfile(out_filename):
-                os.remove(out_filename)
-            self.opts.write(out_filename)
+            os.remove(out_filename)
+        self.opts.write(out_filename)
 
     def format_opt_val_for_writing(self, optname, optvals):
         def roundto(x, n):
