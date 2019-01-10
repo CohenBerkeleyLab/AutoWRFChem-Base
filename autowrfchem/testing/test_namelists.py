@@ -20,7 +20,7 @@ class TestNamelistSetOptions(unittest.TestCase):
         optname = 'e_we'
 
         def replace_slice(slice, vals):
-            curr_val = copy.copy(self.nlc.wrf_namelist.GetOptValNoSect(optname))
+            curr_val = copy.copy(self.nlc.wrf_namelist.get_opt_val_no_sect(optname))
             curr_val[slice] = vals
             return curr_val
 
@@ -98,8 +98,8 @@ class TestNamelistSetOptions(unittest.TestCase):
         nlc = stu.get_namelist_container(sync='no sync')
 
         def check_opt_is_different(opt):
-            wrf_opt = nlc.wrf_namelist.GetOptValNoSect(opt)
-            wps_opt = nlc.wps_namelist.GetOptValNoSect(opt)
+            wrf_opt = nlc.wrf_namelist.get_opt_val_no_sect(opt)
+            wps_opt = nlc.wps_namelist.get_opt_val_no_sect(opt)
             if wrf_opt == wps_opt:
                 raise RuntimeError('{} already the same in WRF and WPS namelists - test will not work'.format(opt))
 
@@ -110,18 +110,18 @@ class TestNamelistSetOptions(unittest.TestCase):
             check_opt_is_different(opt)
 
         for opt in all_test_opts:
-            wrf_val = nlc.wrf_namelist.GetOptValNoSect(opt)
-            wps_val = nlc.wps_namelist.GetOptValNoSect(opt)
+            wrf_val = nlc.wrf_namelist.get_opt_val_no_sect(opt)
+            wps_val = nlc.wps_namelist.get_opt_val_no_sect(opt)
 
             nlc_test = stu.get_namelist_container(sync='wrf')
             with self.subTest(opt=opt, direction='wrf -> wps'):
-                self.assertEqual(nlc_test.wrf_namelist.GetOptValNoSect(opt), wrf_val)
-                self.assertEqual(nlc_test.wps_namelist.GetOptValNoSect(opt), wrf_val)
+                self.assertEqual(nlc_test.wrf_namelist.get_opt_val_no_sect(opt), wrf_val)
+                self.assertEqual(nlc_test.wps_namelist.get_opt_val_no_sect(opt), wrf_val)
 
             nlc_test = stu.get_namelist_container(sync='wps')
             with self.subTest(opt=opt, direction='wps -> wrf'):
-                self.assertEqual(nlc_test.wrf_namelist.GetOptValNoSect(opt), wps_val)
-                self.assertEqual(nlc_test.wps_namelist.GetOptValNoSect(opt), wps_val)
+                self.assertEqual(nlc_test.wrf_namelist.get_opt_val_no_sect(opt), wps_val)
+                self.assertEqual(nlc_test.wps_namelist.get_opt_val_no_sect(opt), wps_val)
 
 
 if __name__ == '__main__':

@@ -351,7 +351,7 @@ def _set_chem_mechanism(pgrm_data):
     chem_names = list(avail_chems.keys())
 
     nlc = pgrm_data[_pgrm_nl_key]
-    curr_chem_opt = nlc.wrf_namelist.GetOptValNoSect('chem_opt')
+    curr_chem_opt = nlc.wrf_namelist.get_opt_val_no_sect('chem_opt')
     curr_chem_name = None
     for name, sect in avail_chems:
         if curr_chem_opt == sect['WRF']['CHEM']['CHEM_OPT']:
@@ -541,7 +541,7 @@ if __name__ == "__main__":
                 if not namelist.IsOptInNamelist(optname):
                     eprint("Could not find '{0}' in specified namelist".format(optname))
                     exit(2)
-                nlopt = namelist.GetOptValNoSect(optname, domainnum=1)
+                nlopt = namelist.get_opt_val_no_sect(optname, domainnum=1)
                 optval = optval.split(",")
                 optbool = []
                 # Any option should be in a string format. However, some may include single quotes.
@@ -597,7 +597,7 @@ if __name__ == "__main__":
                 eprint("Could not find '{0}' in specified namelist".format(optname))
                 exit(2)
             else:
-                val = namelist.GetOptValNoSect(optname, domainnum=1, noquotes=noquote)
+                val = namelist.get_opt_val_no_sect(optname, domainnum=1, noquotes=noquote)
                 print(val)
         else:
             eprint("Command '{0}' not recognized".format(arg[1]))
