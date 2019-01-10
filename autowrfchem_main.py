@@ -1,8 +1,11 @@
 from __future__ import print_function
 import argparse
+import sys
 import pdb
 
 from autowrfchem import wrf_components, use_env_const, _alt_mpi_cmd_var
+from autowrfchem.configuration import config_drivers
+from autowrfchem.compilation import compile_drivers
 
 
 def configure_all(**kwargs):
@@ -38,22 +41,15 @@ def entry_point():
     subparsers = parser.add_subparsers(help='Primary commands used to prepare and execute WRF-Chem')
 
     config_parser = subparsers.add_parser('config', help='Configure all components, including WRF, WPS, and AutoWRFChem')
-    config_parser.add_argument('--override', action='store_true', help='will include the necessary environmental variables to run WRF-Chem (EM_CORE=1, WRF_CHEM=1, etc) regardless of how those variables are set in your shell. It will NOT modify these variables in your shell except when this program is running.')
-    config_parser.add_argument('--namelist', action='store_true', help='will just edit the WRF and WPS namelists.')
-    config_parser.set_defaults(exec_func=configure_all)
+    config_drivers.setup_config_clargs(config_parser)
 
-    namelist_parser = subparsers.add_parser('namelist', help='Modify the namelists. Alias for "config --namelist')
-    namelist_parser.set_defaults(exec_func=modify_namelists)
+    #namelist_parser = subparsers.add_parser('namelist', help='Modify the namelists. Alias for "config --namelist')
 
-    compile_parser = subparsers.add_parser('compile', help='Compile all components. By default, will skip compiling any component that already exists')
-    compile_parser.add_argument('-f', '--force', action='store_true', help='Recompile even if the component exists')
-    compile_parser.add_argument('-o', '--only', action='append', default=[], choices=wrf_components, help='Compile only specific components. Implies --force, i.e. components specified will always be recompiled. May be specified multiple times to compile multiple components.')
-    compile_parser.set_defaults(exec_func=compile_all)
+    compile_parser = subparsers.add_parser('compile', help='Compile all components.')
+    compile_drivers.setup_compile_clargs(compile_parser)
 
     clean_parser = subparsers.add_parser('clean', help='Remove all compiled components for a clean recompile.')
-    clean_parser.add_argument('--inputs', action='store_true', help='Only clean the input files, not the code.')
-    clean_parser.add_argument('--all', action='store_true', help='Clean both the compiled code and the input files.')
-    clean_parser.set_defaults(exec_func=clean_all)
+    compile_drivers.setup_clean_clargs(clean_parser)
 
     prep_parser = subparsers.add_parser('prepinpt', help='Prepare all necessary input')
     prep_parser.add_argument('--check', action='store_true', help='will just check that everything required for preparing the input data is ready to go. Add --met-only as an additional argument to only check what is necessary for preparing meteorology')
@@ -86,7 +82,7 @@ def entry_point():
 
     args = vars(parser.parse_args())
     exec_func = args.pop('exec_func')
-    exec_func(**args)
+    sys.exit(exec_func(**args))
 
 
 if __name__ == '__main__':

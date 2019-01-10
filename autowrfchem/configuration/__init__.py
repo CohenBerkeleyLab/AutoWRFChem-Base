@@ -3,8 +3,8 @@ AUTOMATION = 'AUTOMATION'
 WRF_TOP_DIR = 'WRF_TOP_DIR'
 WPS_TOP_DIR = 'WPS_TOP_DIR'
 MET_TYPE = 'MET_TYPE'
+TARGET = 'WRF_TARGET'
 
-_pretty_n_col = 72
 _pgrm_main_check_key = 'auto_check_main'
 _pgrm_cfg_key = 'configuration'
 _pgrm_clargs_key = 'command_line_args'

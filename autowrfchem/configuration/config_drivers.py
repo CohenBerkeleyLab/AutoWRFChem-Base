@@ -1,12 +1,13 @@
 from __future__ import print_function, absolute_import, division
-import copy
 import os
 import subprocess
 
 from textui import uibuilder as uib, uielements as uiel
 
-from . import  _pgrm_main_check_key, _pgrm_cfg_key, _pgrm_clargs_key, _pgrm_warn_to_choose_env, _pgrm_nl_key,\
-    _pretty_n_col, ENVIRONMENT, AUTOMATION
+from .. import _pretty_n_col
+from ..common_utils import run_external
+from . import  _pgrm_main_check_key, _pgrm_cfg_key, _pgrm_clargs_key, _pgrm_warn_to_choose_env, _pgrm_nl_key, \
+    ENVIRONMENT, AUTOMATION
 from . import config_utils as cu, autowrf_classlib as awclib, autowrf_namelist_main as awnlmain
 
 _preset_fxns = {'get_netcdf_dir()': cu.get_ncdf_dir,
@@ -206,19 +207,6 @@ def _set_envvar_preset(config_obj, preset_dict, interactive=False):
         config_obj[ENVIRONMENT][opt] = preset_val
 
 
-def _create_env_dict(config_obj):
-    """
-    Creates a dictionary that contains all existing environmental variables overwritten by those defined in the config
-    :param config_obj: the object containing the AutoWRFChem configuration data
-
-    :return: the dictionary that can be given to a subprocess function's ``env`` keyword to set the environment
-    :rtype: dict
-    """
-    extant_env = copy.copy(os.environ)
-    extant_env.update(config_obj[ENVIRONMENT])
-    return extant_env
-
-
 def _env_var_presets_help(pgrm_data):
     presets = cu.get_envvar_presets()
     for sect_name, sect in presets.items():
@@ -292,8 +280,8 @@ def _run_wrf_config(config_obj, cl_args):
 
     uiel.user_message('First you will need to choose the compiler options and nesting for WRF itself.',
                       max_columns=_pretty_n_col, pause=True)
-    # Could try using the
-    subprocess.check_call(['./configure'], cwd=config_wrf_dir, env=_create_env_dict(config_obj))
+
+    run_external(['./configure'], cwd=config_wrf_dir, config_obj=config_obj)
 
 
 def _run_wps_config(config_obj, cl_args):
@@ -315,7 +303,7 @@ def _run_wps_config(config_obj, cl_args):
                       'Remember that WPS can usually be built in serial, and that '
                       'you can build without GRIB2 if the met data you wish to use '
                       'is not in GRIB2 format (i.e. is in GRIB1 format).', max_columns=_pretty_n_col, pause=True)
-    subprocess.check_call(['./configure'], cwd=config_wps_dir, env=_create_env_dict(config_obj))
+    run_external(['./configure'], cwd=config_wps_dir, config_obj=config_obj)
 
 
 def _run_all_config(pgrm_data):
@@ -337,6 +325,7 @@ def _run_all_config(pgrm_data):
     cl_args = pgrm_data[_pgrm_clargs_key]
     for config_fxn in _extern_config_fxns:
         config_fxn(config_obj, cl_args)
+
 
 #####################
 # MENU CONSTRUCTION #
@@ -373,6 +362,14 @@ config_menu.attach_submenu(awnlmain.namelist_main, 'Edit namelists and related c
 
 
 def drive_configuration(**cl_args):
+    """
+    Driver function to start the interactive configuration menu
+
+    :param cl_args: command line arguments as keyword value pairs
+
+    :return: exit code
+    :rtype: int
+    """
     # Steps:
     #   1. Setup environmental variables and other parts of the config file
     #   2. Run any external configure scripts
@@ -398,10 +395,13 @@ def drive_configuration(**cl_args):
     except awclib.NamelistReadingError:
         pass
 
-    #pdb.set_trace()
     config_pgrm.main_loop()
 
-    return config_pgrm.data
+    return 0
 
-    for config_fxn in _extern_config_fxns:
-        config_fxn(config_obj, cl_args)
+
+def setup_config_clargs(parser):
+    parser.description = 'Configure all aspects of AutoWRFChem interactively, including environmental variables, ' \
+                         'automation config, and namelists.'
+    # TODO: add --namelist option to go straight to namelists and namelist subcommand
+    parser.set_defaults(exec_func=drive_configuration)

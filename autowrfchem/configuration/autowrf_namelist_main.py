@@ -5,9 +5,9 @@ import datetime as dt
 
 from textui import uibuilder as uib, uielements as uiel, uierrors
 
-from . import _pretty_n_col, _pgrm_cfg_key, _pgrm_nl_key, config_utils, AUTOMATION, MET_TYPE
+from . import _pgrm_cfg_key, _pgrm_nl_key, config_utils, AUTOMATION, MET_TYPE
 from . import autowrf_classlib as WRF
-from .. import _namelists_dir
+from .. import namelists_dir, _pretty_n_col
 import pdb
 
 
@@ -22,8 +22,8 @@ wps_namelist_template_file = os.path.join(MyPath(), "namelist.wps.template")
 def Startup():
     # Check if the NAMELISTS subfolder exists already,
     # create it if not
-    if not os.path.isdir(_namelists_dir):
-        os.mkdir(_namelists_dir)
+    if not os.path.isdir(namelists_dir):
+        os.mkdir(namelists_dir)
 
 
 def eprint(*args, **kwargs):
@@ -31,7 +31,7 @@ def eprint(*args, **kwargs):
 
 
 def select_preexisting_namelists(config_obj):
-    files = os.listdir(_namelists_dir)
+    files = os.listdir(namelists_dir)
     template_name = "Standard template"
     wrffiles = [template_name]
     wpsfiles = [template_name]
@@ -45,13 +45,13 @@ def select_preexisting_namelists(config_obj):
     if wrffile == template_name:
         wrffile = WRF.NamelistContainer.wrf_namelist_template(config_obj)
     elif wrffile is not None:
-        wrffile = os.path.join(_namelists_dir, wrffile)
+        wrffile = os.path.join(namelists_dir, wrffile)
 
     wpsfile = uiel.user_input_list("Choose the WPS namelist: ", wpsfiles)
     if wpsfile == template_name:
         wpsfile = WRF.NamelistContainer.wps_namelist_template()
     elif wpsfile is not None:
-        wpsfile = os.path.join(_namelists_dir, wpsfile)
+        wpsfile = os.path.join(namelists_dir, wpsfile)
 
     return wrffile, wpsfile
 
@@ -121,13 +121,13 @@ def SaveMenu(nlc):
     elif sel == 2:
         while True:
             suffix = UI.user_input_value("suffix", noempty=True)
-            if os.path.isfile(os.path.join(_namelists_dir,"namelist.input.{0}".format(suffix))) or os.path.isfile(os.path.join(_namelists_dir,"namelist.wps.{0}".format(suffix))):
+            if os.path.isfile(os.path.join(namelists_dir, "namelist.input.{0}".format(suffix))) or os.path.isfile(os.path.join(namelists_dir, "namelist.wps.{0}".format(suffix))):
                 if UI.user_input_yn("{0} is already used. Overwrite?".format(suffix), default="n"):
                     break
             else:
                 break
 
-        nlc.write_namelists(namelist_dir=_namelists_dir, suffix=suffix)
+        nlc.write_namelists(namelist_dir=namelists_dir, suffix=suffix)
 
         userans = input("Do you also write to make these the current namelist? y/[n]: ")
         if userans.lower() == "y":
@@ -276,14 +276,14 @@ def _is_not_wrf_chem(pgrm_data):
 def _save_namelists_for_later(nlc):
     while True:
         suffix = uiel.user_input_value("Enter an identifying suffix", emptycancel=False)
-        if os.path.isfile(os.path.join(_namelists_dir, "namelist.input.{0}".format(suffix))) or os.path.isfile(
-                os.path.join(_namelists_dir, "namelist.wps.{0}".format(suffix))):
+        if os.path.isfile(os.path.join(namelists_dir, "namelist.input.{0}".format(suffix))) or os.path.isfile(
+                os.path.join(namelists_dir, "namelist.wps.{0}".format(suffix))):
             if uiel.user_input_yn("{0} is already used. Overwrite?".format(suffix), currentvalue="n"):
                 break
         else:
             break
 
-    nlc.write_namelists(namelist_dir=_namelists_dir, suffix=suffix)
+    nlc.write_namelists(namelist_dir=namelists_dir, suffix=suffix)
 
 
 ###########################
@@ -459,8 +459,8 @@ if __name__ == "__main__":
                     if suffix is not None:
                         wrffname = WRF.NamelistContainer.wrf_namelist_outfile + "." + suffix
                         wpsfname = WRF.NamelistContainer.wps_namelist_outfile + "." + suffix
-                        wrffile = os.path.join(_namelists_dir, wrffname)
-                        wpsfile = os.path.join(_namelists_dir, wpsfname)
+                        wrffile = os.path.join(namelists_dir, wrffname)
+                        wpsfile = os.path.join(namelists_dir, wpsfname)
                         nlc = WRF.NamelistContainer(met=metopt, wrffile=wrffile, wpsfile=wpsfile)
                     else:
                         nlc = WRF.NamelistContainer(met=metopt, wrffile=wrf_namelist_template_file,

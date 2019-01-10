@@ -8,13 +8,12 @@ import os
 from pkg_resources import parse_version
 import re
 import subprocess
-from textui import uielements as uiel
 
 from .. import automation_top_dir
 from . import ENVIRONMENT, AUTOMATION, WRF_TOP_DIR, WPS_TOP_DIR
 
 
-from .. import _config_dir, _config_defaults_dir, ui
+from .. import config_dir, config_defaults_dir, ui
 from . import ConfigurationError
 
 
@@ -97,8 +96,8 @@ class AutoWRFChemConfig(ConfigObj):
 
     :param kwargs: additional keyword args to ConfigObj
     """
-    _config_file = os.path.join(_config_dir, 'autowrfchem.cfg')
-    _default_config_file = os.path.join(_config_defaults_dir, 'autowrfchem_default.cfg')
+    _config_file = os.path.join(config_dir, 'autowrfchem.cfg')
+    _default_config_file = os.path.join(config_defaults_dir, 'autowrfchem_default.cfg')
 
     _missing_env_var = 'Undefined'
 
@@ -259,7 +258,7 @@ class AutoWRFChemConfig(ConfigObj):
 
 def _get_presets_file(filename, preset=None):
     if not os.path.isabs(filename):
-        filename = os.path.join(_config_defaults_dir, filename)
+        filename = os.path.join(config_defaults_dir, filename)
 
     cfg = ConfigObj(filename)
     if preset is None:
@@ -279,7 +278,7 @@ def get_envvar_presets(preset=None):
     :return: the ConfigObj holding all the presets as different sections, or the section of the ConfigObj for the given
      preset if ``preset`` is given.
     """
-    return _get_presets_file(os.path.join(_config_defaults_dir, 'env_var_presets.cfg'), preset=preset)
+    return _get_presets_file(os.path.join(config_defaults_dir, 'env_var_presets.cfg'), preset=preset)
 
 
 def get_met_presets(preset=None):
@@ -295,7 +294,7 @@ def get_met_presets(preset=None):
     :raises ConfigurationLoadError: if the requested preset cannot be found.
     """
     try:
-        return _get_presets_file(os.path.join(_config_defaults_dir, 'met_presets.cfg'), preset=preset)
+        return _get_presets_file(os.path.join(config_defaults_dir, 'met_presets.cfg'), preset=preset)
     except KeyError:
         raise ConfigurationLoadError('Requested met type "{}" is not defined'.format(preset))
 
@@ -311,7 +310,7 @@ def get_chem_presets(preset=None):
     :return: the ConfigObj holding all the presets as different sections, or the section of the ConfigObj for the given
      preset if ``preset`` is given.
     """
-    return _get_presets_file(os.path.join(_config_defaults_dir, 'chem_presets.cfg'), preset=preset)
+    return _get_presets_file(os.path.join(config_defaults_dir, 'chem_presets.cfg'), preset=preset)
 
 
 def _check_ncdf_dir(ncdf_dir, causes=None):

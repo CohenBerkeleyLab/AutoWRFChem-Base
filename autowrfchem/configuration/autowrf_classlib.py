@@ -14,9 +14,9 @@ import tempfile
 from textui import uielements as uiel, uibuilder as uib
 
 import pdb
-from . import autowrf_consts as awc, config_utils, ENVIRONMENT, AUTOMATION, MET_TYPE, WRF_TOP_DIR, WPS_TOP_DIR,\
-    _pretty_n_col, _pgrm_cfg_key
-from .. import _config_dir, _config_defaults_dir
+from . import autowrf_consts as awc, config_utils, ENVIRONMENT, AUTOMATION, MET_TYPE, WRF_TOP_DIR, WPS_TOP_DIR, \
+    _pgrm_cfg_key
+from .. import config_dir, config_defaults_dir, _pretty_n_col
 
 # Python 2/3 compatibility: "input()" in Python 3 is like "raw_input()" in Python 2
 try:
@@ -894,9 +894,9 @@ class NamelistContainer:
     # common to both are kept in sync
     my_dir = os.path.dirname(__file__)
     wrf_namelist_outfile = "namelist.input"
-    wrf_namelist_template_base = os.path.join(_config_defaults_dir, wrf_namelist_outfile + ".template")
+    wrf_namelist_template_base = os.path.join(config_defaults_dir, wrf_namelist_outfile + ".template")
     wps_namelist_outfile = "namelist.wps"
-    wps_namelist_template_base = os.path.join(_config_defaults_dir, wps_namelist_outfile + ".template")
+    wps_namelist_template_base = os.path.join(config_defaults_dir, wps_namelist_outfile + ".template")
     pickle_file = os.path.join(my_dir, "namelist_pickle.pkl")
     cfg_fname = os.path.join(my_dir,"..","wrfbuild.cfg")
     envvar_fname = os.path.join(my_dir,"..","envvar_wrfchem.cfg")
@@ -981,13 +981,14 @@ class NamelistContainer:
         this_wps = 'Use WPS'
         all_wrf = 'Use WRF (and for all following options)'
         all_wps = 'Use WPS (and for all following options)'
+        ignore = 'Do not sync'
 
         def ask_user_behavior(option_name, wrf_val, wps_val):
             prompt = '{opt} differs between WRF ({wrf}) and WPS ({wps}) namelists.\n' \
                      'How do you want to synchronize them?'.format(opt=option_name,
                                                                    wrf=', '.join([str(v) for v in wrf_val]),
                                                                    wps=', '.join([str(v) for v in wps_val]))
-            return uiel.user_input_list(prompt, [this_wrf, this_wps, all_wrf, all_wps], emptycancel=False)
+            return uiel.user_input_list(prompt, [this_wrf, this_wps, all_wrf, all_wps, ignore], emptycancel=False)
 
         def choose_new_val(option_name, wrf_val, wps_val):
 
@@ -1002,9 +1003,13 @@ class NamelistContainer:
                 if user_rsp == this_wrf or user_rsp == all_wrf:
                     new_val = self.wrfopt_to_wpsopt(option_name, wrf_val)
                     nl = self.wps_namelist
-                else:
+                elif user_rsp == this_wps or user_rsp == all_wps:
                     new_val = self.wpsopt_to_wrfopt(option_name, wps_val)
                     nl = self.wrf_namelist
+                elif user_rsp == ignore:
+                    return None, None
+                else:
+                    raise NotImplementedError('No method to respond to user choice "{}" implemented'.format(user_rsp))
 
                 if user_rsp == all_wrf:
                     priorities['wrf'] = True
@@ -1021,14 +1026,16 @@ class NamelistContainer:
         wps_dates = self.wps_namelist.GetTimePeriod()
         if wrf_dates != wps_dates:
             new_val, dest_namelist = choose_new_val('Start and end date', wrf_dates, wps_dates)
-            dest_namelist.SetTimePeriod(*new_val)
+            if new_val is not None:
+                dest_namelist.SetTimePeriod(*new_val)
 
         for optname in self.sync_options:
             wrf_val = self.wrf_namelist.get_opt_val_no_sect(optname)
             wps_val = self.wps_namelist.get_opt_val_no_sect(optname)
             if self.wrfopt_to_wpsopt(optname, wrf_val) != wps_val:
                 new_val, dest_namelist = choose_new_val(optname, wrf_val, wps_val)
-                dest_namelist.set_opt_val_no_sect(optname, new_val)
+                if new_val is not None:
+                    dest_namelist.set_opt_val_no_sect(optname, new_val)
 
     def write_namelists(self, namelist_dir=None, wps_namelist_dir=None, suffix=None):
         """
@@ -1052,7 +1059,7 @@ class NamelistContainer:
         if namelist_dir is None:
             if wps_namelist_dir is not None:
                 TypeError('If the WPS namelist dir is given, the WRF namelist dir must also be given')
-            namelist_dir = _config_dir
+            namelist_dir = config_dir
 
         if wps_namelist_dir is None:
             wps_namelist_dir = namelist_dir
@@ -1134,8 +1141,8 @@ class NamelistContainer:
 
         :return: new instance of this class
         """
-        wrffile = os.path.join(_config_dir, cls.wrf_namelist_outfile)
-        wpsfile = os.path.join(_config_dir, cls.wps_namelist_outfile)
+        wrffile = os.path.join(config_dir, cls.wrf_namelist_outfile)
+        wpsfile = os.path.join(config_dir, cls.wps_namelist_outfile)
         return cls(wrffile=wrffile, wpsfile=wpsfile)
 
     @classmethod
