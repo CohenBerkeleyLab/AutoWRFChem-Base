@@ -9,7 +9,7 @@ from pkg_resources import parse_version
 import re
 import subprocess
 
-from .. import automation_top_dir
+from .. import automation_top_dir, common_utils
 from . import ENVIRONMENT, AUTOMATION, WRF_TOP_DIR, WPS_TOP_DIR
 
 
@@ -116,7 +116,7 @@ class AutoWRFChemConfig(ConfigObj):
     def has_changed(self):
         return self.dict() != self._original_values
 
-    def __init__(self, config_file=None, reload_defaults=True, *args, **kwargs):
+    def __init__(self, config_file=None, reload_defaults=True, ignore_differences_with_defaults=False, *args, **kwargs):
         """
         See class help.
         """
@@ -134,7 +134,7 @@ class AutoWRFChemConfig(ConfigObj):
             self.initial_comment = self._std_initial_comment
 
         self._read_from_defaults = config_file == self._default_config_file
-        if not self._read_from_defaults:
+        if not ignore_differences_with_defaults and not self._read_from_defaults:
             self._check_all_opts_present()
 
         self._original_values = deepcopy(self.dict())
@@ -188,6 +188,16 @@ class AutoWRFChemConfig(ConfigObj):
 
         default_cfg = ConfigObj(self._default_config_file)
         walk_section(self, default_cfg)
+
+    def update_from_defaults(self, no_backup=False):
+        if not no_backup:
+            with open(common_utils.backup_file_name(self.filename), 'wb') as backup_file:
+                self.write(backup_file)
+
+        defaults = AutoWRFChemConfig(AutoWRFChemConfig._default_config_file)
+        defaults.merge(self)
+        defaults.filename = self.filename
+        return defaults
 
     def check_env_vars(self):
         """

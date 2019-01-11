@@ -14,6 +14,19 @@ _preset_fxns = {'get_netcdf_dir()': cu.get_ncdf_dir,
                 'get_yacc_exec()': cu.get_yacc_exec,
                 'get_flexlib_dir()': cu.get_flexlib_dir}
 
+
+############################
+# ALTERNATE MAIN FUNCTIONS #
+############################
+import pdb
+def _update_std_config():
+    cfg = cu.AutoWRFChemConfig(ignore_differences_with_defaults=True)
+    new_cfg = cfg.update_from_defaults()
+    pdb.set_trace()
+    new_cfg.write()
+    uiel.user_message('Your config file has been updated. A backup of the original was created.',
+                      max_columns=_pretty_n_col)
+
 #####################
 # CONFIG MENU HOOKS #
 #####################
@@ -214,6 +227,7 @@ def _env_var_presets_help(pgrm_data):
         help_text = ' '.join([c.lstrip('# ') for c in sect.comments['EM_CORE']])
         uiel.user_message('{}: {}\n'.format(sect_name, help_text), max_columns=_pretty_n_col)
 
+
 ###############################
 # AUTOMATION VARIABLE CONTROL #
 ###############################
@@ -361,7 +375,7 @@ run_config_menu = config_menu.attach_custom_fxn('Run WRF/WPS config scripts', _r
 config_menu.attach_submenu(awnlmain.namelist_main, 'Edit namelists and related config options')
 
 
-def drive_configuration(**cl_args):
+def drive_configuration(update_cfg=False, **cl_args):
     """
     Driver function to start the interactive configuration menu
 
@@ -380,6 +394,10 @@ def drive_configuration(**cl_args):
     #   It would be nice if the met data dir could eventually include year, month, etc. - my idea is to pass it through
     #   strftime and let that fill in the formatted bits, which would probably require looping over all dates in the
     #   run and linking the met files, keeping track of whether or not we've linked a particular directory yet.
+
+    if update_cfg:
+        _update_std_config()
+        return 0
 
     config_obj = cu.AutoWRFChemConfig()
     config_pgrm = uib.Program(config_menu)
@@ -403,5 +421,9 @@ def drive_configuration(**cl_args):
 def setup_config_clargs(parser):
     parser.description = 'Configure all aspects of AutoWRFChem interactively, including environmental variables, ' \
                          'automation config, and namelists.'
+    parser.add_argument('--update-cfg', action='store_true', help='Update the standard config file with any new '
+                                                                  'options added to the default config file. Should '
+                                                                  'only be needed after an update.')
     # TODO: add --namelist option to go straight to namelists and namelist subcommand
+
     parser.set_defaults(exec_func=drive_configuration)

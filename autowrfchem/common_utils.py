@@ -189,9 +189,13 @@ def rmfiles(pattern):
 
 
 def backup_file(filename):
-    now = dtime.now().strftime('%Y-%m-%d_%H_%M_%S')
-    new_name = '{}.backup.{}'.format(filename, now)
+    new_name = backup_file_name(filename)
     shutil.copy2(filename, new_name)
+
+
+def backup_file_name(filename):
+    now = dtime.now().strftime('%Y-%m-%d_%H_%M_%S')
+    return '{}.backup.{}'.format(filename, now)
 
 
 def decode_exit_code(ecode, component_names, print_to_screen=False):
