@@ -136,7 +136,12 @@ def eom_date(date):
 def rmfiles(pattern):
     files = glob(pattern)
     for f in files:
-        shutil.rmtree(f)
+        if os.path.isdir(f):
+            shutil.rmtree(f)
+        else:
+            # need to test for directories because remove won't work on 
+            # directories and rmtree won't on symbolic links
+            os.remove(f)
 
 
 def backup_file(filename):

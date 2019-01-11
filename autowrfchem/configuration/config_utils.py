@@ -349,10 +349,10 @@ def _check_ncdf_dir(ncdf_dir, causes=None):
             else:
                 causes['missing_files'].append(os.path.join(*g))
 
-    if causes is None or len(causes) == 0:
-        return True
-    else:
+    if causes['ncdf_dir_nonexistant'] or len(causes['missing_files']) > 0:
         return False
+    else:
+        return True
 
 
 def get_ncdf_dir(interactive=False):

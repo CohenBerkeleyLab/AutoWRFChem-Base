@@ -13,6 +13,5 @@ prompt-toolkit==2.0.7
 ptyprocess==0.6.0
 Pygments==2.3.1
 six==1.12.0
--e git+git@github.com:joshua-laughner/Python-textui.git@e6fbbf2734dd1e596fec980b2c2279ca29c58361#egg=textui
 traitlets==4.3.2
 wcwidth==0.1.7

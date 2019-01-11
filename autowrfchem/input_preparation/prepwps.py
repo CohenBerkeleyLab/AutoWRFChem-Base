@@ -62,10 +62,11 @@ def _link_geogrid_table(config_obj, wps_dir):
 
 
 def _link_ungrib_table(config_obj, wps_dir):
-    met = config_utils.get_met_presets(config_obj[AUTOMATION][MET_TYPE])
+    met_type = config_obj[AUTOMATION][MET_TYPE]
+    met = config_utils.get_met_presets(met_type)
 
     # make sure that the required Vtable exists
-    target_vtable = os.path.join('ungrib', 'Variable_Tables' 'Vtable.{}'.format(met))
+    target_vtable = os.path.join('ungrib', 'Variable_Tables', 'Vtable.{}'.format(met_type))
     if not os.path.isfile(os.path.join(wps_dir, target_vtable)):
         raise UngribVtableError('Required ungrib Vtable ({vtable}) for met "{met}" does not exist'.format(
             vtable=target_vtable, met=met
@@ -123,7 +124,7 @@ def _link_grib_files(config_obj, wps_dir):
     met_type = config_obj[AUTOMATION][MET_TYPE]
     met_dir = config_obj[AUTOMATION][MET_TOP_DIR]
     if not os.path.isdir(met_dir):
-        raise config_utils.ConfigurationSettingsError('MET_TOP_DIR is not a valid directory')
+        raise config_utils.ConfigurationError('MET_TOP_DIR is not a valid directory')
 
     met_files, req_untarring = _list_met_files(met_type, met_dir, start_date, end_date)
     if req_untarring:

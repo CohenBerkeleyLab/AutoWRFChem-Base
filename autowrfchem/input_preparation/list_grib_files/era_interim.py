@@ -3,17 +3,22 @@ import os
 from ... import common_utils
 from .. import MetFilesMissingError
 
-_era_grib_pattern = 'e5.oper.an.{levels}.{variable}.regn320sc.{start}_{end}.grb'
+_era_grib_pattern = 'e5.oper.an.{levels}.{variable}.regn320{scuv}.{start}_{end}.grb'
 
 
 def _format_era_filename(levels, variable, start, end):
-    return _era_grib_pattern.format(levels=levels, variable=variable, start=start, end=end)
+    if variable.endswith('_u') or variable.endswith('_v') and levels != 'sfc':
+        scuv = 'uv'
+    else:
+        scuv = 'sc'
+
+    return _era_grib_pattern.format(levels=levels, variable=variable, scuv=scuv, start=start, end=end)
 
 
 def _make_era_3d_list(start_date, end_date, level_type):
     vars_3d = ('128_060_pv', '128_075_crwc', '128_076_cswc', '128_129_z', '128_130_t', '128_131_u', '128_132_v',
-               '128_133_q', '128_135_w', '128_138_vo', '128_155_d', '128_157_r', '128_203_o3', '246_clwc', '247_ciwc',
-               '248_cc')
+               '128_133_q', '128_135_w', '128_138_vo', '128_155_d', '128_157_r', '128_203_o3', '128_246_clwc',
+               '128_247_ciwc', '128_248_cc')
 
     files = []
     for var in vars_3d:
@@ -39,8 +44,8 @@ def _make_era_surface_list(start_date, end_date):
                 '228_246_100u', '228_247_100v')
 
     files = []
-    curr_date = start_date
     for var in vars_sfc:
+        curr_date = start_date
         while curr_date <= end_date:
             dstr1 = common_utils.som_date(curr_date).strftime('%Y%m%d00')
             dstr2 = common_utils.eom_date(curr_date).strftime('%Y%m%d23')
