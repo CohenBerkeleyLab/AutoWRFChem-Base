@@ -3,6 +3,7 @@ AUTOMATION = 'AUTOMATION'
 WRF_TOP_DIR = 'WRF_TOP_DIR'
 WPS_TOP_DIR = 'WPS_TOP_DIR'
 MET_TYPE = 'MET_TYPE'
+MET_TOP_DIR = 'MET_TOP_DIR'
 TARGET = 'WRF_TARGET'
 
 _pgrm_main_check_key = 'auto_check_main'

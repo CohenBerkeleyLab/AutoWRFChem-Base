@@ -6,6 +6,7 @@ import pdb
 from autowrfchem import wrf_components, use_env_const, _alt_mpi_cmd_var
 from autowrfchem.configuration import config_drivers
 from autowrfchem.compilation import compile_drivers
+from autowrfchem.input_preparation import prepinput_drivers
 
 
 def configure_all(**kwargs):
@@ -52,17 +53,7 @@ def entry_point():
     compile_drivers.setup_clean_clargs(clean_parser)
 
     prep_parser = subparsers.add_parser('prepinpt', help='Prepare all necessary input')
-    prep_parser.add_argument('--check', action='store_true', help='will just check that everything required for preparing the input data is ready to go. Add --met-only as an additional argument to only check what is necessary for preparing meteorology')
-    prep_parser.add_argument('--met-only', action='store_true', help='will just run WPS and execute real.exe after finishing WPS')
-    prep_parser.add_argument('--no-real', action='store_true', help='will not run real.exe after finishing WPS in met-only mode. Has no effect if --met-only not also specified')
-    prep_parser.add_argument('--split-met', dest='exec_func', const=split_met_prep, action='store_const', help='Split up WPS preparation into multiple jobs')
-
-    split_met_group = prep_parser.add_argument_group('Split-met options')
-    split_met_group.add_argument('--ndays', type=int, default=30, help='Specify how many days each WPS job should do. Default is %(default)s')
-    split_met_group.add_argument('--submit-file', help='If given, a batch job submission file to use to automatically submit the separate WPS jobs.')
-
-    prep_parser.set_defaults(exec_func=prepare_input)
-
+    prepinput_drivers.setup_clargs(prep_parser)
 
     run_parser = subparsers.add_parser('run', help='Start WRF-Chem', description='Execute WRF-Chem. Exactly one of --no-mpi, --ntasks, or --alt-mpi-cmd is required')
     run_req_group = run_parser.add_mutually_exclusive_group(required=True)

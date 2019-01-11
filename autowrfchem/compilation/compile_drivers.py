@@ -154,18 +154,7 @@ def decode_exit_code(ecode, print_to_screen=False):
     :return: a dictionary with each component's name as the key and a boolean indicating if it succeeded.
     :rtype: dict
     """
-    component_states = dict()
-    for idx, name in enumerate(_compile_fxns.keys()):
-        if ecode & common_utils.set_bit(idx):
-            state = 'FAILED'
-        else:
-            state = 'SUCCEEDED'
-
-        component_states[name] = state
-        if print_to_screen:
-            print('{}: {}'.format(name, state))
-
-    return component_states
+    return common_utils.decode_exit_code(ecode, _compile_fxns.keys(), print_to_screen=print_to_screen)
 
 
 def drive_compile(explain_ecode=None, **_):

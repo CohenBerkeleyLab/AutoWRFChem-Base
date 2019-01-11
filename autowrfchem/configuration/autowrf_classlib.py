@@ -972,10 +972,10 @@ class NamelistContainer:
 
         if priority_in in priorities:
             priorities[priority_in] = True
-        elif priority_in == 'no sync':
+        elif priority_in == 'no sync' or priority_in is None:
             return
-        elif priority_in is not None:
-            raise ValueError('priority_in must be "wrf" or "wps"')
+        elif priority_in != 'user':
+            raise ValueError('priority_in must be "wrf", "wps", or "user"')
 
         this_wrf = 'Use WRF'
         this_wps = 'Use WPS'
@@ -1135,7 +1135,7 @@ class NamelistContainer:
             self.write_namelists(namelist_dir=wrf_dir, wps_namelist_dir=wps_dir)
 
     @classmethod
-    def load_namelists(cls):
+    def load_namelists(cls, **kwargs):
         """
         Loads the static namelists from the standard place
 
@@ -1143,7 +1143,7 @@ class NamelistContainer:
         """
         wrffile = os.path.join(config_dir, cls.wrf_namelist_outfile)
         wpsfile = os.path.join(config_dir, cls.wps_namelist_outfile)
-        return cls(wrffile=wrffile, wpsfile=wpsfile)
+        return cls(wrffile=wrffile, wpsfile=wpsfile, **kwargs)
 
     @classmethod
     def load_templates(cls, config_obj=None):

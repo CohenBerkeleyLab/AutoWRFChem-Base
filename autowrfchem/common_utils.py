@@ -1,6 +1,9 @@
 import copy
+from datetime import datetime as dtime, timedelta as tdel
+from glob import glob
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 
@@ -110,3 +113,63 @@ def set_bit(bit, val=0, yn=True):
     else:
         # otherwise AND that bit with the negated mask to clear it
         return val & ~mask
+
+
+def iter_dates(start_date, end_date, step=None):
+    if step is None:
+        step = tdel(days=1)
+    curr_date = start_date
+    while curr_date <= end_date:
+        yield curr_date
+        curr_date += step
+
+
+def som_date(date):
+    return date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def eom_date(date):
+    date = date.replace(day=28) + tdel(days=4)
+    return som_date(date) - tdel(microseconds=1)
+
+
+def rmfiles(pattern):
+    files = glob(pattern)
+    for f in files:
+        shutil.rmtree(f)
+
+
+def backup_file(filename):
+    now = dtime.now().strftime('%Y-%m-%d_%H_%M_%S')
+    new_name = '{}.backup.{}'.format(filename, now)
+    shutil.copy2(filename, new_name)
+
+
+def decode_exit_code(ecode, component_names, print_to_screen=False):
+    """
+    Decode what a particular exit code means.
+
+    :param ecode: the exit code
+    :type ecode: int
+
+    :param component_names: iterable of component names in the order corresponding to which bits represent them
+    :type component_names: iterable of str
+
+    :param print_to_screen: optional, if ``True``, prints each component and whether is succeeded or failed.
+    :type print_to_screen: bool
+
+    :return: a dictionary with each component's name as the key and a boolean indicating if it succeeded.
+    :rtype: dict
+    """
+    component_states = dict()
+    for idx, name in enumerate(component_names):
+        if ecode & set_bit(idx):
+            state = 'FAILED'
+        else:
+            state = 'SUCCEEDED'
+
+        component_states[name] = state
+        if print_to_screen:
+            print('{}: {}'.format(name, state))
+
+    return component_states

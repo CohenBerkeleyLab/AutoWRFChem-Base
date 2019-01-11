@@ -66,7 +66,7 @@ def load_menu(pgrm_data, loadmethod):
         elif loadmethod == 'preexisting':
             wrffile, wpsfile = select_preexisting_namelists(config_obj)
             if wrffile is not None and wpsfile is not None:
-                nlcon = WRF.NamelistContainer(wrffile=wrffile, wpsfile=wpsfile)
+                nlcon = WRF.NamelistContainer(wrffile=wrffile, wpsfile=wpsfile, sync_priority='user')
             else:
                 raise WRF.NamelistReadingError('')
         elif loadmethod == 'current':
@@ -74,7 +74,7 @@ def load_menu(pgrm_data, loadmethod):
                 if not uiel.user_input_yn('This will revert to the previous saved version. Continue?'):
                     return
 
-            nlcon = WRF.NamelistContainer.load_namelists()
+            nlcon = WRF.NamelistContainer.load_namelists(sync_priority='user')
     except WRF.NamelistReadingError as err:
         uiel.user_message('Problem reading namelist file: {}.\nTry another method of loading'.format(err.args[0]),
                           max_columns=_pretty_n_col, pause=True)
@@ -393,219 +393,7 @@ namelist_main.attach_custom_fxn('Select meteorology', _choose_met_type, hide_if=
 namelist_main.attach_custom_fxn('Select MOZBC data file', _choose_mozbc_file,
                                 hide_if=lambda pgrm_data: _is_not_wrf_chem(pgrm_data) or _namelist_not_loaded(pgrm_data))
 
-if __name__ == "__main__":
 
-    # Namelist generation has 3 modes:
-    #  1) Allow the user to interactively set the options
-    #  2) Use specified existing namelists, ensuring that common options are matched
-    #  3) Make a temporary namelist. This will write out the namelist file, but not overwrite the existing pickle file.
-    #
-    # If option 1 is chosen, it will need to load the template namelists and start the interactive menu. Upon finishing,
-    # the user can choose to save the namelist files in another location to use with option 2 later, in addition to
-    # saving the actual files to be linked. This can also load a different preexisting
-    #
-    # If option 2 is chosen, meteorology will need to be specified on the command line and optionally the namelist
-    # files. (If the files are not specified, it will use the usual template files).
-    #
-    # Option 3 needs the values to be modified temporarily specified on the command line. Start and end dates are
-    # are special and must be specified using --start-date=yyyy-mm-dd_HH:MM:SS and --end-date=yyyy-mm-dd_HH:MM:SS. All
-    # other options can be modified by using their name as the flag, e.g. --bio_emiss_opt=3 will set bio_emiss_opt to 3
-    # in the WRF namelist.
-    #
-    # This program will create the NAMELIST folder in its directory the first time it runs.
-    # NAMELISTS is where you can save WPS/WRF namelist pairs for future use.  This can take two forms. First, you could
-    # just save a WPS namelist there after playing with it in the WPS directory using the plotgrids utility to fine-
-    # tune your domain, then load that namelist with any WRF namelist (including the standard template) to use the
-    # domain with any preexisting settings. Alternately, you can save a pair of WPS/WRF namelist from within the program
-    # and load them later. The domain information in the WPS namelist always takes precedence.
-
-    arg = sys.argv
-
-    if len(arg) == 1: # should have just this function name
-        # Option 1: interactive
-        while True:
-            nlc = StartMenu()
-            if nlc is not None:
-                break
-
-        while nlc.UserMenu():
-            pass
-        SaveMenu(nlc)
-    if len(arg) > 1:
-        WRF.DEBUG_LEVEL=0 #turn off normal messages from the classlib interface to prevent sending erroneous strings into the shell
-        if arg[1] == "-h" or arg[1] == "--help":
-            PrintHelp("DOC")
-            print("Allowed met types are: ", end="")
-            for m in WRF.Namelist.mets:
-                print(m, end=" ")
-            print("")
-        elif arg[1] == "load":
-            argopts = arg[2:]
-            metopt = None
-            suffix = None
-            for opt in argopts:
-                optname, optval = SplitOpt(opt)
-                if optname == "--met":
-                    metopt = optval
-                elif optname == "--suffix":
-                    suffix = optval
-
-                if metopt is None:
-                    eprint("Error: requesting to load an existing namelist requires meteorology to be specified with")
-                    eprint("       --met=<met option> in order to ensure that both namelists use the same meteorology")
-                    eprint("       settings. <met option> can be one of {0}".format(WRF.Namelist.mets))
-                    exit(1)
-                else:
-                    if suffix is not None:
-                        wrffname = WRF.NamelistContainer.wrf_namelist_outfile + "." + suffix
-                        wpsfname = WRF.NamelistContainer.wps_namelist_outfile + "." + suffix
-                        wrffile = os.path.join(namelists_dir, wrffname)
-                        wpsfile = os.path.join(namelists_dir, wpsfname)
-                        nlc = WRF.NamelistContainer(met=metopt, wrffile=wrffile, wpsfile=wpsfile)
-                    else:
-                        nlc = WRF.NamelistContainer(met=metopt, wrffile=wrf_namelist_template_file,
-                                                    wpsfile=wps_namelist_template_file)
-
-                    nlc.write_namelists()
-                    nlc.SavePickle()
-
-        elif arg[1] == "mod" or arg[1] == "modify" or arg[1] == "tempmod":
-            # So this needs to parse the options looking for a couple things:
-            #   1) start-date and end-date need to be handled specially, to use the set_time_period method
-            #   2) run-time also needs to be handled specially as well
-            #   3) Also add the capability to do relative changes to start and end time with the syntax
-            #       --start-date=+12h
-            #   4) start-date, end-date and run-time need to be processed at the end once we are sure which ones we
-            #       have
-            nlc = WRF.NamelistContainer.LoadPickle()
-            start_date = None
-            end_date = None
-            run_time = None
-            force_wrf_only = False
-            for a in arg[2:]:
-                if a == "--force-wrf-only":
-                    force_wrf_only = True
-                    continue
-
-                optname, optval = SplitOpt(a)
-                if optname == "--start-date":
-                    start_date = ParseDateTime(optval)
-                elif optname == "--end-date":
-                    end_date = ParseDateTime(optval)
-                elif optname == "--run-time":
-                    run_time = ParseTimeDelta(optval)
-                elif optname == "--met":
-                    nlc.set_met(optval)
-                else:
-                    optname = optname.replace("-", "")
-                    nlc.cmd_set_other_opt(optname, optval, force_wrf_only=force_wrf_only)
-
-            if start_date is not None or end_date is not None:
-                nlc.set_time_period(start_date, end_date)
-
-            if run_time is not None:
-                if run_time < dt.timedelta(0):
-                    eprint("Negative values of run time are not permitted")
-                    exit(1)
-
-                # both are returned to ensure it is not stored as a tuple
-                start_date, end_date = nlc.get_time_period()
-                end_date = start_date + run_time
-                nlc.set_time_period(start_date, end_date)
-
-            nlc.write_namelists()
-            # Only write the pickle if the change is not temporary
-            if arg[1] == "mod" or arg[1] == "modify":
-                nlc.SavePickle()
-
-        elif "check" in arg[1]:
-            wrf_namelist = os.path.join(MyPath(), "namelist.input")
-            wps_namelist = os.path.join(MyPath(), "namelist.wps")
-
-            # Verify that the namelists exist
-            CheckNamelists(wrf_namelist, wps_namelist)
-
-            nlc = WRF.NamelistContainer(wrffile=wrf_namelist, wpsfile=wps_namelist)
-            if "wrf" in arg[1]:
-                namelist = nlc.wrf_namelist
-            elif "wps" in arg[1]:
-                namelist = nlc.wps_namelist
-            else:
-                eprint("If trying to check an argument, must use check-wrf-opt or check-wps-opt")
-                eprint("(neither 'wrf' nor 'wps' found in the flag)")
-                exit(1)
-
-            for a in arg[2:]:
-                optname, optval = SplitOpt(a)
-                optname = optname.replace("-", "")
-                if not namelist.IsOptInNamelist(optname):
-                    eprint("Could not find '{0}' in specified namelist".format(optname))
-                    exit(2)
-                nlopt = namelist.get_opt_val_no_sect(optname, domainnum=1)
-                optval = optval.split(",")
-                optbool = []
-                # Any option should be in a string format. However, some may include single quotes.
-                # So we try comparing with and without single quotes
-                for i in range(len(optval)):
-                    optbool.append(False)
-                    if optval[i] == nlopt:
-                        optbool[i] = True
-                        break
-                    else:
-                        if nlopt.startswith("'"):
-                            nlopt = nlopt[1:]
-                        if nlopt.endswith("'"):
-                            nlopt = nlopt[:-1]
-                        if optval[i] == nlopt:
-                            optbool[i] = True
-                            break
-
-                if all([not b for b in optbool]):
-                    exit(1)
-            exit(0)
-        elif "get" in arg[1]:
-            wrf_namelist = os.path.join(MyPath(), "namelist.input")
-            wps_namelist = os.path.join(MyPath(), "namelist.wps")
-
-            # Verify that the namelists exist
-            CheckNamelists(wrf_namelist, wps_namelist)
-            
-            nlc = WRF.NamelistContainer(wrffile=wrf_namelist, wpsfile=wps_namelist)
-            if "wrf" in arg[1]:
-                namelist = nlc.wrf_namelist
-            elif "wps" in arg[1]:
-                namelist = nlc.wps_namelist
-            else:
-                eprint("If trying to get an argument, must use get-wrf-opt or get-wps-opt")
-                eprint("(neither 'wrf' nor 'wps' was found in the flag)")
-                exit(1)
-
-            if "--no-quotes" in arg:
-                noquote=True
-                arg.remove("--no-quotes")
-            else:
-                noquote=False
-
-            optname = arg[2].replace("-", "")
-            if optname == "startdate":
-                start_date, end_date = nlc.get_time_period()
-                print(start_date.strftime("%Y-%m-%d_%H:%M:%S"))
-            elif optname == "enddate":
-                start_date, end_date = nlc.get_time_period()
-                print(end_date.strftime("%Y-%m-%d_%H:%M:%S"))
-            elif not namelist.IsOptInNamelist(optname):
-                eprint("Could not find '{0}' in specified namelist".format(optname))
-                exit(2)
-            else:
-                val = namelist.get_opt_val_no_sect(optname, domainnum=1, noquotes=noquote)
-                print(val)
-        else:
-            eprint("Command '{0}' not recognized".format(arg[1]))
-            exit(1)
-
-    if len(arg) == 1:
-        print("Goodbye")
-    exit(0)
 # Documentation section that will be printed as help text from the command line
 
 # BEGINDOC

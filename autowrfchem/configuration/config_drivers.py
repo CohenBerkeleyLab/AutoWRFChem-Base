@@ -271,7 +271,7 @@ def _run_wrf_config(config_obj, cl_args):
     :type config_obj: `AutoWRFChemConfig`
 
     :param cl_args: a dictionary containing the names and values of any command line arguments; should be the result
-     of ``vars(parser.parse_args())`` where ``parser`` is an `argparse.ArgumentParser` instance.
+     of ``vars(parser._parse_args())`` where ``parser`` is an `argparse.ArgumentParser` instance.
     :type cl_args: dict
 
     :return: None
@@ -292,7 +292,7 @@ def _run_wps_config(config_obj, cl_args):
     :type config_obj: `AutoWRFChemConfig`
 
     :param cl_args: a dictionary containing the names and values of any command line arguments; should be the result
-     of ``vars(parser.parse_args())`` where ``parser`` is an `argparse.ArgumentParser` instance.
+     of ``vars(parser._parse_args())`` where ``parser`` is an `argparse.ArgumentParser` instance.
     :type cl_args: dict
 
     :return: None
@@ -391,7 +391,7 @@ def drive_configuration(**cl_args):
     try:
         # Try reading the standard namelists if they exist. If not then the user will have to choose how to load the
         # namelists in the menu
-        config_pgrm.data[_pgrm_nl_key] = awclib.NamelistContainer.load_namelists()
+        config_pgrm.data[_pgrm_nl_key] = awclib.NamelistContainer.load_namelists(sync_priority='user')
     except awclib.NamelistReadingError:
         pass
 

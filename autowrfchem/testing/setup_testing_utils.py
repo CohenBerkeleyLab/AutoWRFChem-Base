@@ -31,6 +31,6 @@ def get_wrf_namelist(with_chem=False):
     return awclib.WrfNamelist(_wrf_nl(with_chem), reg)
 
 
-def get_namelist_container(with_chem=False, sync=None):
+def get_namelist_container(with_chem=False, sync='user'):
     return awclib.NamelistContainer(wrffile=_wrf_nl(with_chem), wpsfile=_wps_nl(), wrf_registry=get_registry(),
                                     sync_priority=sync)

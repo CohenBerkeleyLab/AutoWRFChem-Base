@@ -3,8 +3,13 @@ from __future__ import print_function
 import argparse
 import calendar
 import datetime as dt
+from glob import glob
+import os
 import re
 import sys
+
+from .. import MetFilesMissingError
+from . import MixedTarredUntarredFilesError
 
 import pdb
 __author__ = 'Josh'
@@ -12,10 +17,8 @@ __author__ = 'Josh'
 # This program generates a list of expected met GRIB files for a given time period
 # The time period should be specified in YYYY-MM-DD format from the command line.
 
-def print_help():
-    pass
 
-def narr_end_of_range_date(curr_date, ndays):
+def _narr_end_of_range_date(curr_date, ndays):
     # NARR date ranges are such that they do not cross months; if a range of days would
     # straddle two months, it is cut off at the end of that month.
     tdel = dt.timedelta(days=ndays-1)
@@ -36,7 +39,7 @@ def narr_end_of_range_date(curr_date, ndays):
     return eor_date
 
 
-def narr_next_sfc_date(curr_date):
+def _narr_next_sfc_date(curr_date):
     #pdb.set_trace()
     if curr_date.day >= 1 and curr_date.day <= 9:
         tdel = dt.timedelta(days=10-curr_date.day)
@@ -49,20 +52,20 @@ def narr_next_sfc_date(curr_date):
     return curr_date + tdel
 
 
-def make_narr_grib_list(start_date, end_date):
+def _make_narr_grib_list(start_date, end_date):
     if (type(start_date) is not dt.datetime and type(start_date) is not dt.date or
             type(end_date) is not dt.datetime and type(end_date) is not dt.date):
         raise TypeError("start_date and end_date must be datetime or date objects")
 
     narr_files = []
-    narr_files += list_narr_grib_files(start_date, end_date, '3D')
-    narr_files += list_narr_grib_files(start_date, end_date, 'RS.flx')
-    narr_files += list_narr_grib_files(start_date, end_date, 'RS.sfc')
+    narr_files += _list_narr_grib_files(start_date, end_date, '3D')
+    narr_files += _list_narr_grib_files(start_date, end_date, 'RS.flx')
+    narr_files += _list_narr_grib_files(start_date, end_date, 'RS.sfc')
 
     return narr_files
 
 
-def list_narr_grib_files(start_date, end_date, suffix):
+def _list_narr_grib_files(start_date, end_date, suffix):
     # NARR files are every 3 hours, so make sure the start date is at the beginning of a three
     # hour block
     start_date = start_date.replace(minute=0, second=0, microsecond=0)
@@ -80,20 +83,20 @@ def list_narr_grib_files(start_date, end_date, suffix):
     return files
 
 
-def make_narr_tar_list(start_date, end_date):
+def _make_narr_tar_list(start_date, end_date):
     if (type(start_date) is not dt.datetime and type(start_date) is not dt.date or
             type(end_date) is not dt.datetime and type(end_date) is not dt.date):
         raise TypeError("start_date and end_date must be datetime or date objects")
 
     narr_files = []
-    list_narr_tar_files(narr_files, start_date, end_date, "NARR3D_", 3)
-    list_narr_tar_files(narr_files, start_date, end_date, "NARRflx_", 8)
-    list_narr_sfc_tar_files(narr_files, start_date, end_date)
+    _list_narr_tar_files(narr_files, start_date, end_date, "NARR3D_", 3)
+    _list_narr_tar_files(narr_files, start_date, end_date, "NARRflx_", 8)
+    _list_narr_sfc_tar_files(narr_files, start_date, end_date)
 
     return narr_files
 
 
-def list_narr_tar_files(narr_files, start_date, end_date, stem, ndays, extension="tar"):
+def _list_narr_tar_files(narr_files, start_date, end_date, stem, ndays, extension="tar"):
     # NARR files come in multi day groups, the file names are of the format
     # NARRxxx_YYYYMM_SSEE.tar, where YYYY is the year, MM the month, SS the first
     # day of the three day group and EE the last. xxx varies depending on the file type,
@@ -115,7 +118,7 @@ def list_narr_tar_files(narr_files, start_date, end_date, stem, ndays, extension
 
     curr_date = dt.date(start_date.year, start_date.month, dom)
     while curr_date <= end_date:
-        eor_date = narr_end_of_range_date(curr_date, ndays)
+        eor_date = _narr_end_of_range_date(curr_date, ndays)
         fname = "{namestem}{year:04}{month:02}_{sday:02}{eday:02}.{ext}".format(
             namestem = stem, year = curr_date.year, month=curr_date.month, sday=curr_date.day, eday=eor_date.day,
             ext=extension
@@ -126,7 +129,7 @@ def list_narr_tar_files(narr_files, start_date, end_date, stem, ndays, extension
             curr_date = curr_date.replace(day=1)
 
 
-def list_narr_sfc_tar_files(narr_files, start_date, end_date, extension="tar"):
+def _list_narr_sfc_tar_files(narr_files, start_date, end_date, extension="tar"):
     # The sfc files are annoying because they use the date ranges 1-9, 10-19, and 20-eom, rather than being consistent.
     # So of course they need special handling
     curr_date = start_date
@@ -143,9 +146,48 @@ def list_narr_sfc_tar_files(narr_files, start_date, end_date, extension="tar"):
             year=curr_date.year, month=curr_date.month, days=drange, ext=extension
         )
         narr_files.append(fname)
-        curr_date = narr_next_sfc_date(curr_date)
+        curr_date = _narr_next_sfc_date(curr_date)
 
-def parse_args():
+
+def requires_untarring(met_dir, start_date, end_date):
+    untarred_files = _make_narr_grib_list(start_date, end_date)
+    tarred_files = _make_narr_tar_list(start_date, end_date)
+
+    found_untarred = any([os.path.isfile(f) for f in untarred_files])
+    found_tarred = any([os.path.isfile(f) for f in tarred_files])
+
+    if found_untarred:
+        return False
+    elif found_tarred:
+        return True
+    else:
+        raise MetFilesMissingError('No NARR met files found for the time period {start} to {end} in {dir}'
+                                   .format(start=start_date, end=end_date, dir=met_dir))
+
+
+def get_required_met_files(met_dir, start_date, end_date):
+    if requires_untarring(met_dir, start_date, end_date):
+        met_files = _make_narr_tar_list(start_date, end_date)
+        req_untar = True
+    else:
+        met_files = _make_narr_grib_list(start_date, end_date)
+        req_untar = False
+
+    met_files = [os.path.join(met_dir, f) for f in met_files]
+
+    # TODO: here's where I'd make the function smarter about file hierarchies
+    missing_files = [f for f in met_files if not os.path.isfile(f)]
+    n_missing_files = len(missing_files)
+    if n_missing_files > 0:
+        raise MetFilesMissingError('{n} met files missing:\n  * {files}'.format(
+            n=n_missing_files, files='\n  * '.join(missing_files)
+        ))
+    else:
+        return met_files, req_untar
+
+
+def _parse_args():
+    # TODO: move this functionality up to a driver function
     allowed_mets = ["narr"]
     parser = argparse.ArgumentParser(description='Generate the list of meteorology files expected by WPS for a given '
                                                  'date range (either the .tar archives or the actual GRIB files)',
@@ -182,12 +224,12 @@ def parse_args():
 
 #### MAIN FUNCTION #####
 if __name__ == "__main__":
-    met, start_datetime, end_datetime, delim, do_grib = parse_args()
+    met, start_datetime, end_datetime, delim, do_grib = _parse_args()
     if met == "narr":
         if do_grib:
-            files = make_narr_grib_list(start_datetime, end_datetime)
+            files = _make_narr_grib_list(start_datetime, end_datetime)
         else:
-            files = make_narr_tar_list(start_datetime.date(), end_datetime.date())
+            files = _make_narr_tar_list(start_datetime.date(), end_datetime.date())
         print(delim.join(files))
     else:
         raise RuntimeError("No action specified for met type {0}".format(met))

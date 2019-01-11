@@ -13,6 +13,7 @@ namelists_dir = os.path.join(config_dir, 'NAMELISTS')
 wrf_dir_default = os.path.abspath(os.path.join(_pkg_dir, '..', 'WRFV3'))
 
 complogs_dir = os.path.abspath(os.path.join(_pkg_dir, '..', 'COMPLOGS'))
+preplogs_dir = os.path.abspath(os.path.join(_pkg_dir, '..', 'PREPLOGS'))
 
 ##############
 # Components #
