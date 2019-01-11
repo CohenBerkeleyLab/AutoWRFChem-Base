@@ -75,7 +75,7 @@ def drive_input_prep(config_obj=None, finish=False, met_only=False):
     if config_obj is None:
         config_obj = config_utils.AutoWRFChemConfig()
 
-    if config_utils.get_is_chem(config_obj):
+    if not config_utils.get_is_chem(config_obj):
         met_only = True
 
     ecode = 0
