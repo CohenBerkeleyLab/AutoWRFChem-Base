@@ -22,10 +22,9 @@ preplogs_dir = os.path.abspath(os.path.join(_pkg_dir, '..', 'PREPLOGS'))
 wrf_components = ['wrf', 'wps', 'nei', 'megan', 'mozbc']
 
 
-###########################
-# Environmental variables #
-###########################
+########################
+# Formatting constants #
+########################
 
-use_env_const = 'use_env_var'
-_alt_mpi_cmd_var = 'AWC_MPICMD'
 _pretty_n_col = 72
+wrf_date_fmt = '%Y-%m-%d_%H:%M:%S'

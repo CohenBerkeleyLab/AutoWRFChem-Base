@@ -2,6 +2,7 @@ import copy
 from datetime import datetime as dtime, timedelta as tdel
 from glob import glob
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -9,8 +10,11 @@ import sys
 
 from textui import uiutils
 
-from .configuration import ENVIRONMENT
+from .configuration import ENVIRONMENT, AUTOMATION, MPI_CMD
 from .configuration.config_utils import AutoWRFChemConfig
+
+
+wrf_date_re = re.compile(r'\d{4}-\d{2}-\d{2}_\d{2}:\d{2}:\d{2}')
 
 
 def eprint(msg, max_columns=None):
@@ -44,7 +48,7 @@ def _create_env_dict(config_obj):
     return extant_env
 
 
-def run_external(command, cwd='.', config_obj=None, logfile_handle=None, **subproc_args):
+def run_external(command, cwd='.', config_obj=None, logfile_handle=None, dry_run=False, **subproc_args):
     """
     Run an external program
 
@@ -65,6 +69,9 @@ def run_external(command, cwd='.', config_obj=None, logfile_handle=None, **subpr
     :param logfile_handle: a handle, returned by `open()` to a file to write a log (stdout + stderr) to.
     :type logfile_handle: file handle
 
+    :param dry_run: optional, if ``True`` does not execute the command but just prints it
+    :type dry_run: bool
+
     :param subproc_args: additional keyword arguments to pass to `subprocess.check_call`. Note that ``cwd`` and ``env``
      are already given, and if ``logfile_handle`` is not None, then ``stdout`` and ``stderr`` will be overridden to
      point to that log file.
@@ -84,7 +91,44 @@ def run_external(command, cwd='.', config_obj=None, logfile_handle=None, **subpr
     if logfile_handle is not None:
         subproc_args.update({'stdout': logfile_handle, 'stderr': logfile_handle})
 
-    subprocess.check_call(command, cwd=cwd, env=env, **subproc_args)
+    if dry_run:
+        print(' '.join(command))
+    else:
+        subprocess.check_call(command, cwd=cwd, env=env, **subproc_args)
+
+
+def run_external_mpi(command, ntasks=1, config_obj=None, *args, **kwargs):
+    """
+    Run an external program using MPI.
+
+    MPI compiled programs usually need to be launched by calling something like "mpirun". For example,
+     "mpirun -np 20 wrf.exe" would run WRF with 20 MPI tasks. This function will launch a program with the MPI command
+     defined in the config file.
+
+    :param command: the command to execute with MPI.
+    :type command: str
+
+    :param ntasks: how many MPI tasks to launch.
+    :type ntasks: int
+
+    :param config_obj: the AutoWRFChemConfig object that will define the environmental variables for the command as well
+     as the MPI command.
+    :type config_obj: `AutoWRFChemConfig`
+
+    :param args: additional positional arguments passed through to `run_external`
+    :param kwargs: additional keyword arguments passed through to `run_external`
+
+    :return: None
+    :raises subprocess.CalledProcessError: if the command returns a non-zero exit code.
+    """
+
+    if config_obj is None:
+        config_obj = AutoWRFChemConfig()
+    elif ntasks < 1:
+        raise ValueError('ntasks must be >= 1')
+
+    command = config_obj[AUTOMATION][MPI_CMD].format(ntasks=ntasks, cmd=command)
+    run_external(command, config_obj=config_obj, *args, **kwargs)
 
 
 def set_bit(bit, val=0, yn=True):
@@ -178,3 +222,46 @@ def decode_exit_code(ecode, component_names, print_to_screen=False):
             print('{}: {}'.format(name, state))
 
     return component_states
+
+
+def parse_time_string(time_str):
+
+    # The string can either be specified as dd-HH:MM:SS or #d#h#m#s. The two formats cannot be mixed
+    if any([c in time_str for c in 'dhms']):
+        return _parse_time_string_dhms(time_str)
+    else:
+        return _parse_time_string_colon(time_str)
+
+
+def _parse_time_string_dhms(time_str):
+    parts = {'days': re.compile(r'\d+(?=d)'),
+             'hours': re.compile(r'\d+(?=h)'),
+             'minutes': re.compile(r'\d+(?=m)'),
+             'seconds': re.compile(r'\d+(?=s)')}
+
+    durations = dict()
+    for part, regex in parts.items():
+        user_dur = regex.search(time_str)
+        if user_dur is not None:
+            durations[part] = int(user_dur.group())
+
+    return tdel(**durations)
+
+
+def _parse_time_string_colon(time_str):
+    if '-' in time_str:
+        days, hms = time_str.split('-')
+    elif ':' in time_str:
+        hms = time_str
+        days = '0'
+    else:
+        days = time_str
+        hms = '00:00:00'
+
+    days = int(days)
+    hms = hms.split(':')
+    while len(hms) < 3:
+        hms.append('00')
+
+    hours, minutes, seconds = [int(p) for p in hms]
+    return tdel(days=days, hours=hours, minutes=minutes, seconds=seconds)

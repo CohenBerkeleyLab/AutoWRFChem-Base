@@ -3,11 +3,11 @@ import argparse
 import sys
 import pdb
 
-from autowrfchem import wrf_components, use_env_const, _alt_mpi_cmd_var
+from autowrfchem import wrf_components, use_env_const, _alt_mpi_cmd_var, extra_help
 from autowrfchem.configuration import config_drivers
 from autowrfchem.compilation import compile_drivers
 from autowrfchem.input_preparation import prepinput_drivers
-
+from autowrfchem.execution import run_wrf_drivers
 
 def configure_all(**kwargs):
     print('Configure everything! {}'.format(kwargs))
@@ -56,24 +56,18 @@ def entry_point():
     prepinput_drivers.setup_clargs(prep_parser)
 
     run_parser = subparsers.add_parser('run', help='Start WRF-Chem', description='Execute WRF-Chem. Exactly one of --no-mpi, --ntasks, or --alt-mpi-cmd is required')
-    run_req_group = run_parser.add_mutually_exclusive_group(required=True)
-    run_req_group.add_argument('--no-mpi', '--nompi', action='store_true', help='Run WRF without MPI, using just ./wrf.exe in the WRFV3/run directory')
-    run_req_group.add_argument('--ntasks', type=int, help='How many MPI tasks to use when executing WRF')
-    run_req_group.add_argument('--alt-mpi-cmd', nargs='?', default=None, const=use_env_const, help='Use a different MPI command to launch WRF-Chem (the default is "mpirun -np $NTASKS wrf.exe"). A command can be given as the argument to this option or in the environmental variable "{envvar}"'.format(envvar=_alt_mpi_cmd_var))
+    run_wrf_drivers.setup_clargs(run_parser)
 
-    rst_group = run_parser.add_argument_group('Restart options')
-    rst_group.add_argument('--rst', action='store_true', help='will try to find the last wrfrst file within the time period in the namelist in WRFV3/run and start from there. If it cannot find a wrfrst file, it will abort.')
-    rst_group.add_argument('--allow-no-file', action='store_true', help='if no restart files in the proper time period is found, this will start from the beginning instead of aborting.')
-
-    run_general_group = run_parser.add_argument_group('General options')
-    run_general_group.add_argument('--run-for', type=int, help='only run for x, where x is a time period in days, hours, minutes, and seconds. Works with rst, in fact, is primarily intended to work with rst so that you can break a long run up into smaller chunks. Example: %(prog)s run rst --run-for=28d will run for 28 days from the last restart file.')
-    run_general_group.add_argument('--dry-run', action='store_true', help='do everything normally done for run except start WRF; instead, it will print out the command it would use This can be used with any of the previous flags to check how %(prog)s would modify the namelist, try to execute WRF, etc.')
-
-    run_parser.set_defaults(exec_func=run_wrf)
+    help_parser = subparsers.add_parser('help', help='Extra in-depth help')
+    extra_help.setup_clargs(help_parser)
 
     args = vars(parser.parse_args())
-    exec_func = args.pop('exec_func')
-    sys.exit(exec_func(**args))
+    try:
+        exec_func = args.pop('exec_func')
+    except KeyError:
+        parser.print_help()
+    else:
+        sys.exit(exec_func(**args))
 
 
 if __name__ == '__main__':

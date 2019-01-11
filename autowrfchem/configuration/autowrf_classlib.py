@@ -1,6 +1,6 @@
 from __future__ import print_function, absolute_import, division, unicode_literals
 
-from collections import OrderedDict
+from abc import abstractmethod
 import copy
 import datetime as dt
 import f90nml
@@ -11,7 +11,7 @@ import re
 from string import whitespace
 import tempfile
 
-from textui import uielements as uiel, uibuilder as uib
+from textui import uielements as uiel, uibuilder as uib, uiutils
 
 import pdb
 from . import autowrf_consts as awc, config_utils, ENVIRONMENT, AUTOMATION, MET_TYPE, WRF_TOP_DIR, WPS_TOP_DIR, \
@@ -312,9 +312,7 @@ class Namelist(object):
         self._registry = copy.deepcopy(registry)
         self._registry.registry['rconfig'].update(self._extra_registry_entries)
 
-        self.opts = OrderedDict()
-
-        self.read_namelist(namelist_file)
+        self.opts = self.read_namelist(namelist_file)
         for fxn in self.startup_fxns:
             fxn(self)
 
@@ -325,16 +323,22 @@ class Namelist(object):
             for opt_name, opt_val in sect_dict.items():
                 yield opt_val, opt_name, sect_name
 
-    def read_namelist(self, namelist_file):
-        self.opts = f90nml.read(namelist_file)
+    @classmethod
+    def read_namelist(cls, namelist_file):
+        return f90nml.read(namelist_file)
 
-    def write_namelist(self, out_filename):
+    def write_namelist(self, out_filename, is_temporary=False):
         # TODO: find a way to preserve comments
         # Have had some very weird behavior when trying to patch namelists, so for now we just overwrite them each
         # time
-        if os.path.isfile(out_filename):
-            os.remove(out_filename)
-        self.opts.write(out_filename)
+        with open(out_filename, 'w') as nlfile:
+            if is_temporary:
+                msg = '! WARNING: THIS FILE HAS BEEN CHANGED BY AUTOWRFCHEM\n\n'
+                msg += 'Changes made to this file will be overwritten WITHOUT WARNING when running AutoWRFChem. To ' \
+                       'make permanent changes, modify the namelist file in {} instead.'.format(config_dir)
+                msg = '\n! '.join(uiutils.hard_wrap(msg, max_columns=_pretty_n_col))
+                nlfile.write(msg + '\n')
+            self.opts.write(nlfile)
 
     def format_opt_val_for_writing(self, optname, optvals):
         def roundto(x, n):
@@ -358,6 +362,51 @@ class Namelist(object):
             s += padding + val + ','
 
         return s
+
+    @abstractmethod
+    def set_time_period(self, start_date, end_date):
+        """
+        Set the model run time period defined in the namelist.
+
+        :param start_date: the start date. If given as a datetime, then the start date is set to exactly that. If given
+         a date, then the new year, month, and day are merged with the current hour, minute, and second. If given as a
+         timedelta, then that timedelta is added to the current start date.
+        :type start_date: `datetime.datetime`, `datetime.date`, or `datetime.timedelta`.
+
+        :param end_date: the end date. Same behavior as start_date.
+        :type end_date: `datetime.datetime`, `datetime.date`, or `datetime.timedelta`.
+
+        :return: None
+        """
+        pass
+
+    def set_run_time(self, run_time, start_date=None):
+        """
+        Set the model to run for a given time.
+
+        :param run_time: how long to run for
+        :type run_time: `datetime.timedelta`
+
+        :param start_date: optional, if given, sets the model start date to this and the end date to this + run_time.
+         If omitted, the current start time is kept.
+
+        :return: None
+        """
+        if start_date is None:
+            start_date, _ = self.get_time_period()
+
+        end_date = start_date + run_time
+        self.set_time_period(start_date, end_date)
+
+    @abstractmethod
+    def get_time_period(self):
+        """
+        Get the time period for the model run defined in the namelist.
+
+        :return: start and end dates
+        :rtype: two `datetime.datetime` objects
+        """
+        pass
 
     def TimedeltaHMS(self, td):
         seconds = td.seconds
@@ -675,42 +724,49 @@ class WrfNamelist(Namelist):
                 msg_print("Keeping gfdda_end equal to run time. To stop this, set its value manually")
                 msg_print("(do not choose 'y' when asked whether to use it for the entire run)")
 
-    def SetTimePeriod(self, startdate, enddate):
-        curr_start, curr_end = self.GetTimePeriod()
-        if startdate is None:
-            startdate = curr_start
-        elif type(startdate) is dt.timedelta:
-            startdate = curr_start + startdate
-        elif type(startdate) is not dt.date and type(startdate) is not dt.datetime:
-            raise TypeError("startdate must be a datetime date or datetime")
+    def set_time_period(self, start_date=None, end_date=None):
+        """
+        Set the time period for the WRF namelist
 
-        if enddate is None:
-            enddate = curr_end
-        elif type(enddate) is dt.timedelta:
-            enddate = curr_end + enddate
-        elif type(enddate) is not dt.date and type(enddate) is not dt.datetime:
-            raise TypeError("enddate must be a datetime date or datetime")
+        :param start_date: the date for the start of the
+        :param end_date:
+        :return:
+        """
+        curr_start, curr_end = self.get_time_period()
+        if start_date is None:
+            start_date = curr_start
+        elif type(start_date) is dt.timedelta:
+            start_date = curr_start + start_date
+        elif type(start_date) is not dt.date and type(start_date) is not dt.datetime:
+            raise TypeError("start_date must be a datetime date or datetime")
 
-        if type(startdate) is dt.date:
-            startdate = dt.datetime(startdate.year, startdate.month, startdate.day)
-        if type(enddate) is dt.date:
-            enddate = dt.datetime(enddate.year, enddate.month, enddate.day)
+        if end_date is None:
+            end_date = curr_end
+        elif type(end_date) is dt.timedelta:
+            end_date = curr_end + end_date
+        elif type(end_date) is not dt.date and type(end_date) is not dt.datetime:
+            raise TypeError("end_date must be a datetime date or datetime")
 
-        self.set_opt_val("time_control", "start_year", startdate.year)
-        self.set_opt_val("time_control", "start_month", startdate.month)
-        self.set_opt_val("time_control", "start_day", startdate.day)
-        self.set_opt_val("time_control", "start_hour", startdate.hour)
-        self.set_opt_val("time_control", "start_minute", startdate.minute)
-        self.set_opt_val("time_control", "start_second", startdate.second)
+        if type(start_date) is dt.date:
+            start_date = dt.datetime(start_date.year, start_date.month, start_date.day)
+        if type(end_date) is dt.date:
+            end_date = dt.datetime(end_date.year, end_date.month, end_date.day)
 
-        self.set_opt_val("time_control", "end_year", enddate.year)
-        self.set_opt_val("time_control", "end_month", enddate.month)
-        self.set_opt_val("time_control", "end_day", enddate.day)
-        self.set_opt_val("time_control", "end_hour", enddate.hour)
-        self.set_opt_val("time_control", "end_minute", enddate.minute)
-        self.set_opt_val("time_control", "end_second", enddate.second)
+        self.set_opt_val("time_control", "start_year", start_date.year)
+        self.set_opt_val("time_control", "start_month", start_date.month)
+        self.set_opt_val("time_control", "start_day", start_date.day)
+        self.set_opt_val("time_control", "start_hour", start_date.hour)
+        self.set_opt_val("time_control", "start_minute", start_date.minute)
+        self.set_opt_val("time_control", "start_second", start_date.second)
 
-        run_td = enddate - startdate
+        self.set_opt_val("time_control", "end_year", end_date.year)
+        self.set_opt_val("time_control", "end_month", end_date.month)
+        self.set_opt_val("time_control", "end_day", end_date.day)
+        self.set_opt_val("time_control", "end_hour", end_date.hour)
+        self.set_opt_val("time_control", "end_minute", end_date.minute)
+        self.set_opt_val("time_control", "end_second", end_date.second)
+
+        run_td = end_date - start_date
         self.set_opt_val("time_control", "run_days", run_td.days)
         hms = self.TimedeltaHMS(run_td)
         self.set_opt_val("time_control", "run_hours", hms[0])
@@ -723,7 +779,7 @@ class WrfNamelist(Namelist):
             run_time = int(math.ceil(self.GetRunTime(runtime_unit="hours")))
             self.set_opt_val("fdda", "gfdda_end_h", run_time)
 
-    def GetTimePeriod(self, runtime_unit="days"):
+    def get_time_period(self):
         # Returns start and end dates as datetime objects and the runtime
         # in days as a float. Can override the runtime unit to be "days",
         # "hours", "minutes", or "seconds"
@@ -781,33 +837,33 @@ class WpsNamelist(Namelist):
     startup_fxns = Namelist.startup_fxns + [_update_opt_domains]
     callbacks = {'max_dom': _update_opt_domains}
 
-    def SetTimePeriod(self, startdate, enddate):
-        curr_start, curr_end = self.GetTimePeriod()
-        if startdate is None:
-            startdate = curr_start
-        elif type(startdate) is dt.timedelta:
-            startdate = curr_start + startdate
-        elif type(startdate) is not dt.date and type(startdate) is not dt.datetime:
-            raise TypeError("startdate must be a datetime date, datetime, timedelta, or None (to keep current start date)")
+    def set_time_period(self, start_date, end_date):
+        curr_start, curr_end = self.get_time_period()
+        if start_date is None:
+            start_date = curr_start
+        elif type(start_date) is dt.timedelta:
+            start_date = curr_start + start_date
+        elif type(start_date) is not dt.date and type(start_date) is not dt.datetime:
+            raise TypeError("start_date must be a datetime date, datetime, timedelta, or None (to keep current start date)")
 
-        if enddate is None:
-            enddate = curr_end
-        elif type(enddate) is dt.timedelta:
-            enddate = curr_end + enddate
-        elif type(enddate) is not dt.date and type(enddate) is not dt.datetime:
-            raise TypeError("enddate must be a datetime date, datetime, timedelta, or None (to keep current end date)")
+        if end_date is None:
+            end_date = curr_end
+        elif type(end_date) is dt.timedelta:
+            end_date = curr_end + end_date
+        elif type(end_date) is not dt.date and type(end_date) is not dt.datetime:
+            raise TypeError("end_date must be a datetime date, datetime, timedelta, or None (to keep current end date)")
 
-        if type(startdate) is dt.date:
-            startdate = dt.datetime(startdate.year, startdate.month, startdate.day)
-        if type(enddate) is dt.date:
-            enddate = dt.datetime(enddate.year, enddate.month, enddate.day)
+        if type(start_date) is dt.date:
+            start_date = dt.datetime(start_date.year, start_date.month, start_date.day)
+        if type(end_date) is dt.date:
+            end_date = dt.datetime(end_date.year, end_date.month, end_date.day)
 
-        start_string = "{:04}-{:02}-{:02}_{:02}:{:02}:{:02}".format(startdate.year, startdate.month, startdate.day, startdate.hour, startdate.minute, startdate.second)
+        start_string = "{:04}-{:02}-{:02}_{:02}:{:02}:{:02}".format(start_date.year, start_date.month, start_date.day, start_date.hour, start_date.minute, start_date.second)
         self.set_opt_val("share", "start_date", start_string)
-        end_string = "{:04}-{:02}-{:02}_{:02}:{:02}:{:02}".format(enddate.year, enddate.month, enddate.day, enddate.hour, enddate.minute, enddate.second)
+        end_string = "{:04}-{:02}-{:02}_{:02}:{:02}:{:02}".format(end_date.year, end_date.month, end_date.day, end_date.hour, end_date.minute, end_date.second)
         self.set_opt_val("share", "end_date", end_string)
 
-    def GetTimePeriod(self):
+    def get_time_period(self):
         # Returns the start and end dates as datetime objects. Currently just returns the first domain time period
         # since this has been set up really for a single domain run.
         start_string = self.get_opt_val_no_sect("start_date", 1)
@@ -1022,12 +1078,12 @@ class NamelistContainer:
 
         # Hard coded: start and end date. These require special handling b/c they are defined differently in the
         # two namelists
-        wrf_dates = self.wrf_namelist.GetTimePeriod()
-        wps_dates = self.wps_namelist.GetTimePeriod()
+        wrf_dates = self.wrf_namelist.get_time_period()
+        wps_dates = self.wps_namelist.get_time_period()
         if wrf_dates != wps_dates:
             new_val, dest_namelist = choose_new_val('Start and end date', wrf_dates, wps_dates)
             if new_val is not None:
-                dest_namelist.SetTimePeriod(*new_val)
+                dest_namelist.set_time_period(*new_val)
 
         for optname in self.sync_options:
             wrf_val = self.wrf_namelist.get_opt_val_no_sect(optname)
@@ -1037,7 +1093,7 @@ class NamelistContainer:
                 if new_val is not None:
                     dest_namelist.set_opt_val_no_sect(optname, new_val)
 
-    def write_namelists(self, namelist_dir=None, wps_namelist_dir=None, suffix=None):
+    def write_namelists(self, namelist_dir=None, wps_namelist_dir=None, suffix=None, is_temporary=False):
         """
         Write the WRF and WPS namelists out as files.
 
@@ -1071,8 +1127,8 @@ class NamelistContainer:
             wrffile += "." + suffix
             wpsfile += "." + suffix
 
-        self.wrf_namelist.write_namelist(wrffile)
-        self.wps_namelist.write_namelist(wpsfile)
+        self.wrf_namelist.write_namelist(wrffile, is_temporary=is_temporary)
+        self.wps_namelist.write_namelist(wpsfile, is_temporary=is_temporary)
 
     def save_namelists(self, save_mode='both', awc_config=None):
         """
@@ -1132,7 +1188,7 @@ class NamelistContainer:
         if save_temp:
             wrf_dir = config_utils.get_wrf_run_dir(awc_config)
             wps_dir = config_utils.get_wps_run_dir(awc_config)
-            self.write_namelists(namelist_dir=wrf_dir, wps_namelist_dir=wps_dir)
+            self.write_namelists(namelist_dir=wrf_dir, wps_namelist_dir=wps_dir, is_temporary=True)
 
     @classmethod
     def load_namelists(cls, **kwargs):
@@ -1153,6 +1209,19 @@ class NamelistContainer:
         :return: new instance of this class
         """
         return cls(wrffile=cls.wrf_namelist_template(config_obj), wpsfile=cls.wps_namelist_template())
+
+    @classmethod
+    def clear_temp_changes(cls, config_obj=None):
+        """
+        Reset the temporary namelists to match the permanent one
+
+        :param config_obj: alternate AutoWRFChemConfig to use. If not provided, the default is loaded.
+        :type config_obj: AutoWRFChemConfig
+
+        :return: None
+        """
+        nlc = cls.load_namelists()
+        nlc.save_namelists(save_mode='temporary', awc_config=config_obj)
 
     #########
     # UTILS #
@@ -1286,26 +1355,35 @@ class NamelistContainer:
         start/end date and run time settings are consistent.
 
         :param start_time: the beginning of the model run. If given as a `datetime.time` object, only the hour/minute/
-         second of the start time will be changed; the year/month/day will be kept at their current values.
-        :type start_time: `datetime.datetime` or `datetime.time`
+         second of the start time will be changed; the year/month/day will be kept at their current values. Otherwise
+         the behavior based on type is the same as `Namelist.set_time_period`.
+        :type start_time: `datetime.datetime`, `datetime.date`, `datetime.timedelta`, or `datetime.time`
 
-        :param end_time: the end of the model run.  If given as a `datetime.time` object, only the hour/minute/
-         second of the start time will be changed; the year/month/day will be kept at their current values.
-        :type end_time: `datetime.datetime` or `datetime.time`
+        :param end_time: the end of the model run. Same behavior as start_time.
+        :type end_time:  `datetime.datetime`, `datetime.date`, `datetime.timedelta`, or `datetime.time`
 
         :return: None
         """
         # If given datetime.time objects, it will assume that you want to set the start or end time but leave the date
         # component alone
-        curr_start, curr_end = self.wps_namelist.GetTimePeriod()
+        curr_start, curr_end = self.wps_namelist.get_time_period()
         if type(start_time) is dt.time:
             start_time = dt.datetime(curr_start.year, curr_start.month, curr_start.day, start_time.hour, start_time.minute, start_time.second)
 
         if type(end_time) is dt.time:
             end_time = dt.datetime(curr_end.year, curr_end.month, curr_end.day, end_time.hour, end_time.minute, end_time.second)
 
-        self.wrf_namelist.SetTimePeriod(start_time, end_time)
-        self.wps_namelist.SetTimePeriod(start_time, end_time)
+        self.wrf_namelist.set_time_period(start_time, end_time)
+        self.wps_namelist.set_time_period(start_time, end_time)
+
+    def set_run_time(self, run_time, start_date=None):
+        """
+        Set the run time for both contained namelists.
+
+        Behavior is the same as `Namelist.set_run_time`.
+        """
+        self.wrf_namelist.set_run_time(run_time, start_date)
+        self.wps_namelist.set_run_time(run_time, start_date)
 
     def get_time_period(self):
         """
@@ -1317,7 +1395,7 @@ class NamelistContainer:
         # Basically a shortcut method to the WRF method of the same name. Switch from WPS to WRF for nesting: commonly,
         # inner nested domains only run the first time step for WPS since boundary conditions are then provided by the
         # outer domain. So getting the time from the WPS namelists doesn't really make sense.
-        return self.wrf_namelist.GetTimePeriod()
+        return self.wrf_namelist.get_time_period()
 
     def user_set_time_period(self):
         """
@@ -1330,7 +1408,7 @@ class NamelistContainer:
 
         # TODO: update for multiple domains
         # TODO: replace UI calls with textui
-        curr_start, curr_end = self.wps_namelist.GetTimePeriod()
+        curr_start, curr_end = self.wps_namelist.get_time_period()
         start_time = uiel.user_input_date("Enter the starting date", currentvalue=curr_start)
         if start_time is None:
             start_time = curr_start
