@@ -1,12 +1,11 @@
 from __future__ import print_function, absolute_import, division, unicode_literals
-from argparse import ArgumentParser
+
 from collections import OrderedDict
 import os
 import subprocess
-import sys
 
 from .. import common_utils, _pretty_n_col, complogs_dir
-from ..configuration import config_utils, AUTOMATION, TARGET
+from ..configuration import config_utils, AUTOMATION, AUTOMATION_PATHS, TARGET
 
 
 class CompilationNotRequired(Exception):

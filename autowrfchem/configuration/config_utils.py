@@ -10,7 +10,7 @@ import re
 import subprocess
 
 from .. import automation_top_dir, common_utils
-from . import ENVIRONMENT, AUTOMATION, WRF_TOP_DIR, WPS_TOP_DIR
+from . import ENVIRONMENT, AUTOMATION, AUTOMATION_PATHS, WRF_TOP_DIR, WPS_TOP_DIR
 
 
 from .. import config_dir, config_defaults_dir, ui
@@ -229,7 +229,7 @@ class AutoWRFChemConfig(ConfigObj):
         if len(failures['undefined_vars']) > 0 or failures['bad_netcdf_dir'] or failures['bad_yacc_path'] or failures['bad_flex_path']:
             raise ConfigurationSettingsError('There is a problem with the current environmental variables', failures)
 
-    def check_auto_vars(self, options_to_check=None):
+    def check_auto_paths(self, options_to_check=None):
         """
         Check that the automation config settings are valid.
 
@@ -248,9 +248,9 @@ class AutoWRFChemConfig(ConfigObj):
         req_files_and_dirs = {'WRF_TOP_DIR': ['configure', 'compile', 'run'],
                               'WPS_TOP_DIR': ['configure', 'compile', 'geogrid', 'ungrib', 'metgrid']}
 
-        auto_vars = self[AUTOMATION]
-        failures = {k: False for k in auto_vars.keys()}
-        for opt, val in auto_vars.items():
+        auto_paths = self[AUTOMATION_PATHS]
+        failures = {k: False for k in auto_paths.keys()}
+        for opt, val in auto_paths.items():
             if options_to_check is not None and opt not in options_to_check:
                 continue
 
@@ -667,7 +667,7 @@ def _make_component_top_dir(component_var, config_obj=None):
     if config_obj is None:
         config_obj = AutoWRFChemConfig()
 
-    component_dir = _rel_dir_to_abs(config_obj[AUTOMATION][component_var])
+    component_dir = _rel_dir_to_abs(config_obj[AUTOMATION_PATHS][component_var])
 
     if not os.path.isdir(component_dir):
         raise ComponentMissingError('The directory {} pointed to by config {} does not exist'.format(

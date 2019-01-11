@@ -7,7 +7,7 @@ import tarfile
 from textui import uiutils
 
 from .. import common_utils, preplogs_dir, _pretty_n_col
-from ..configuration import AUTOMATION, MET_TYPE, MET_TOP_DIR, config_utils, autowrf_classlib as awclib
+from ..configuration import AUTOMATION, AUTOMATION_PATHS, MET_TYPE, MET_TOP_DIR, config_utils, autowrf_classlib as awclib
 from . import PrepInputError
 from .list_grib_files import narr, era_interim
 

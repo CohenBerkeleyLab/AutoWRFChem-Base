@@ -14,7 +14,7 @@ import tempfile
 from textui import uielements as uiel, uibuilder as uib, uiutils
 
 import pdb
-from . import autowrf_consts as awc, config_utils, ENVIRONMENT, AUTOMATION, MET_TYPE, WRF_TOP_DIR, WPS_TOP_DIR, \
+from . import autowrf_consts as awc, config_utils, ENVIRONMENT, AUTOMATION, AUTOMATION_PATHS, MET_TYPE, WRF_TOP_DIR, WPS_TOP_DIR, \
     _pgrm_cfg_key
 from .. import config_dir, config_defaults_dir, _pretty_n_col
 
@@ -1176,7 +1176,7 @@ class NamelistContainer:
             raise ValueError('Allowed values for save_mode are "both", "perm", "permanent", "temp", or "temporary"')
 
         try:
-            awc_config.check_auto_vars([WRF_TOP_DIR, WPS_TOP_DIR])
+            awc_config.check_auto_paths([WRF_TOP_DIR, WPS_TOP_DIR])
         except config_utils.ConfigurationSettingsError:
             if save_temp:
                 print('Cannot write namelists to WRF/WPS directories, those directories are not set up correctly')

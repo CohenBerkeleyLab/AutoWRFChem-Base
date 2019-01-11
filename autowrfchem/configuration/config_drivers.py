@@ -7,7 +7,7 @@ from textui import uibuilder as uib, uielements as uiel
 from .. import _pretty_n_col
 from ..common_utils import run_external
 from . import  _pgrm_main_check_key, _pgrm_cfg_key, _pgrm_clargs_key, _pgrm_warn_to_choose_env, _pgrm_nl_key, \
-    ENVIRONMENT, AUTOMATION
+    ENVIRONMENT, AUTOMATION, AUTOMATION_PATHS
 from . import config_utils as cu, autowrf_classlib as awclib, autowrf_namelist_main as awnlmain
 
 _preset_fxns = {'get_netcdf_dir()': cu.get_ncdf_dir,
@@ -18,11 +18,10 @@ _preset_fxns = {'get_netcdf_dir()': cu.get_ncdf_dir,
 ############################
 # ALTERNATE MAIN FUNCTIONS #
 ############################
-import pdb
+
 def _update_std_config():
     cfg = cu.AutoWRFChemConfig(ignore_differences_with_defaults=True)
     new_cfg = cfg.update_from_defaults()
-    pdb.set_trace()
     new_cfg.write()
     uiel.user_message('Your config file has been updated. A backup of the original was created.',
                       max_columns=_pretty_n_col)
@@ -60,7 +59,7 @@ def _check_config_state_hook(pgrm_data, force_check=False, is_exit=False):
         fixes_needed = True
 
     try:
-        config_obj.check_auto_vars()
+        config_obj.check_auto_paths()
     except cu.ConfigurationSettingsError:
         uiel.user_message('  * One or more automation variables need fixed')
         fixes_needed = True
@@ -133,7 +132,7 @@ def _diagnose_env_problem(pgrm_data):
 def _diagnose_auto_problem(pgrm_data):
     config_obj = pgrm_data[_pgrm_cfg_key]
     try:
-        config_obj.check_auto_vars()
+        config_obj.check_auto_paths()
     except cu.ConfigurationSettingsError as err:
         failures = err.args[1]
         bad_vars = '\n    * '.join([opt for opt, chk in failures.items() if chk])
@@ -251,8 +250,8 @@ def _set_component_paths(pgrm_data):
 
     # If all the components are currently expected in the same directory, make that the default value
     curr_top_dir = 'INIT'
-    auto_vars = pgrm_data[_pgrm_cfg_key][AUTOMATION]
-    for opt, val in auto_vars.items():
+    auto_paths = pgrm_data[_pgrm_cfg_key][AUTOMATION_PATHS]
+    for opt, val in auto_paths.items():
         component_top = os.path.dirname(val.rstrip('/\\'))
         if curr_top_dir == 'INIT':
             curr_top_dir = component_top
@@ -267,9 +266,9 @@ def _set_component_paths(pgrm_data):
                                     testmsg='That is not a directory.', currentvalue=curr_top_dir)
 
     if top_dir is not None:
-        for opt, val in auto_vars.items():
+        for opt, val in auto_paths.items():
             base_dir = os.path.basename(val.rstrip('/\\'))
-            config_obj[AUTOMATION][opt] = os.path.join(top_dir, base_dir)
+            config_obj[AUTOMATION_PATHS][opt] = os.path.join(top_dir, base_dir)
 
 
 ####################################

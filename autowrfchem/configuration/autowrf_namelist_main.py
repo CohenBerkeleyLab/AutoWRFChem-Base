@@ -5,7 +5,7 @@ import datetime as dt
 
 from textui import uibuilder as uib, uielements as uiel, uierrors
 
-from . import _pgrm_cfg_key, _pgrm_nl_key, config_utils, AUTOMATION, MET_TYPE
+from . import _pgrm_cfg_key, _pgrm_nl_key, config_utils, AUTOMATION, AUTOMATION_PATHS, MET_TYPE
 from . import autowrf_classlib as WRF
 from .. import namelists_dir, _pretty_n_col
 import pdb

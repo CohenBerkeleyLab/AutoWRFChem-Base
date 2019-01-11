@@ -10,7 +10,7 @@ import sys
 
 from textui import uiutils
 
-from .configuration import ENVIRONMENT, AUTOMATION, MPI_CMD
+from .configuration import ENVIRONMENT, AUTOMATION, AUTOMATION_PATHS, MPI_CMD
 from .configuration.config_utils import AutoWRFChemConfig
 
 
