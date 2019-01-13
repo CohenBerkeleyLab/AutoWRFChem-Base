@@ -245,7 +245,7 @@ def _set_component_paths(pgrm_data):
     :return: None
     """
     def check_dir(user_dir):
-        user_dir = cu._rel_dir_to_abs(user_dir)
+        user_dir = cu.rel_dir_to_abs(user_dir)
         return os.path.isdir(user_dir)
 
     # If all the components are currently expected in the same directory, make that the default value
@@ -294,7 +294,7 @@ def _run_wrf_config(config_obj, cl_args):
     uiel.user_message('First you will need to choose the compiler options and nesting for WRF itself.',
                       max_columns=_pretty_n_col, pause=True)
 
-    run_external(['./configure'], cwd=config_wrf_dir, config_obj=config_obj)
+    run_external(['./configure'], config_obj, cwd=config_wrf_dir)
 
 
 def _run_wps_config(config_obj, cl_args):
@@ -316,7 +316,7 @@ def _run_wps_config(config_obj, cl_args):
                       'Remember that WPS can usually be built in serial, and that '
                       'you can build without GRIB2 if the met data you wish to use '
                       'is not in GRIB2 format (i.e. is in GRIB1 format).', max_columns=_pretty_n_col, pause=True)
-    run_external(['./configure'], cwd=config_wps_dir, config_obj=config_obj)
+    run_external(['./configure'], config_obj, cwd=config_wps_dir)
 
 
 def _run_all_config(pgrm_data):

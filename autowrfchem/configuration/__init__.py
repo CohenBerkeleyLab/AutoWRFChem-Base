@@ -10,6 +10,9 @@ MET_TOP_DIR = 'MET_TOP_DIR'
 TARGET = 'WRF_TARGET'
 MPI_CMD = 'MPI_CMD'
 
+HPC = 'HPC'
+SUBMIT_CMD = 'SUBMIT_CMD'
+
 _pgrm_main_check_key = 'auto_check_main'
 _pgrm_cfg_key = 'configuration'
 _pgrm_clargs_key = 'command_line_args'

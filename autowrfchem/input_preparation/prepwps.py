@@ -85,7 +85,7 @@ def _run_geogrid(config_obj, wps_dir):
 
     geogrid_log_file = _log_filename_helper(wps_dir, 'geogrid')
     with open(geogrid_log_file, 'w') as logfile:
-        common_utils.run_external(['./geogrid.exe'], cwd=wps_dir, logfile_handle=logfile, config_obj=config_obj)
+        common_utils.run_external(['./geogrid.exe'], config_obj, cwd=wps_dir, logfile_handle=logfile)
 
 
 def _list_met_files(met_type, met_dir, start_date, end_date):
@@ -133,7 +133,7 @@ def _link_grib_files(config_obj, wps_dir):
     # remove old links
     common_utils.rmfiles(os.path.join(wps_dir, 'GRIBFILE*'))
 
-    common_utils.run_external(['./link_grib.csh'] + met_files, cwd=wps_dir, config_obj=config_obj)
+    common_utils.run_external(['./link_grib.csh'] + met_files, config_obj, cwd=wps_dir)
 
 
 def _run_ungrib(config_obj, wps_dir):
@@ -143,14 +143,14 @@ def _run_ungrib(config_obj, wps_dir):
 
     ungrib_log_file = _log_filename_helper(wps_dir, 'ungrib')
     with open(ungrib_log_file, 'w') as logfile:
-        common_utils.run_external(['./ungrib.exe'], cwd=wps_dir, logfile_handle=logfile, config_obj=config_obj)
+        common_utils.run_external(['./ungrib.exe'], config_obj, cwd=wps_dir, logfile_handle=logfile)
 
 
 def _run_metgrid(config_obj, wps_dir):
     common_utils.rmfiles(os.path.join(wps_dir, 'met_em*'))
     metgrid_log_file = _log_filename_helper(wps_dir, 'metgrid')
     with open(metgrid_log_file, 'w') as logfile:
-        common_utils.run_external(['./metgrid.exe'], cwd=wps_dir, logfile_handle=logfile, config_obj=config_obj)
+        common_utils.run_external(['./metgrid.exe'], config_obj, cwd=wps_dir, logfile_handle=logfile)
 
 
 def _link_to_wrf(config_obj, wps_dir):

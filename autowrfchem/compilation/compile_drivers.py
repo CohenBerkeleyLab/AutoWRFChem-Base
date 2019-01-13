@@ -50,7 +50,7 @@ def _compile_wrf(config_obj, ecode):
                                        format(dir=wrf_top_dir))
     target = config_obj[AUTOMATION][TARGET]
     with open(os.path.join(complogs_dir, 'compile_wrf.log'), 'w') as logfile:
-        common_utils.run_external(['./compile', target], cwd=wrf_top_dir, config_obj=config_obj, logfile_handle=logfile)
+        common_utils.run_external(['./compile', target], config_obj, cwd=wrf_top_dir, logfile_handle=logfile)
 
 
 def _compile_wps(config_obj, ecode):
@@ -76,7 +76,7 @@ def _compile_wps(config_obj, ecode):
                                        format(dir=wps_top_dir))
 
     with open(os.path.join(complogs_dir, 'compile_wps.log'), 'w') as logfile:
-        common_utils.run_external(['./compile'], cwd=wps_top_dir, config_obj=config_obj, logfile_handle=logfile)
+        common_utils.run_external(['./compile'], config_obj, cwd=wps_top_dir, logfile_handle=logfile)
 
 
 # Add components here in the order they should be compiled, assuming all will be compiled.
@@ -98,9 +98,9 @@ def clean_all_exe(config_obj):
     :return: None
     """
     wrf_top_dir = config_utils.get_wrf_top_dir(config_obj)
-    common_utils.run_external(['./clean', '-a'], cwd=wrf_top_dir, config_obj=config_obj)
+    common_utils.run_external(['./clean', '-a'], config_obj, cwd=wrf_top_dir)
     wps_top_dir = config_utils.get_wps_top_dir(config_obj)
-    common_utils.run_external(['./clean', '-a'], cwd=wps_top_dir, config_obj=config_obj)
+    common_utils.run_external(['./clean', '-a'], config_obj, cwd=wps_top_dir)
 
 
 def compile_all(config_obj=None):

@@ -626,7 +626,7 @@ def get_is_chem(config_obj=None):
 # FUNCTIONS DEALING WITH COMPONENT PATHS #
 ##########################################
 
-def _rel_dir_to_abs(top_dir):
+def rel_dir_to_abs(top_dir):
     """
     Make a directory relative to the top automation directory into an absolute path.
 
@@ -644,7 +644,7 @@ def _rel_dir_to_abs(top_dir):
     return top_dir
 
 
-def _make_component_top_dir(component_var, config_obj=None):
+def make_component_top_dir(component_var, config_obj=None):
     """
     Create the path to the top directory of a component, i.e. WRF, WPS, etc.
 
@@ -667,7 +667,7 @@ def _make_component_top_dir(component_var, config_obj=None):
     if config_obj is None:
         config_obj = AutoWRFChemConfig()
 
-    component_dir = _rel_dir_to_abs(config_obj[AUTOMATION_PATHS][component_var])
+    component_dir = rel_dir_to_abs(config_obj[AUTOMATION_PATHS][component_var])
 
     if not os.path.isdir(component_dir):
         raise ComponentMissingError('The directory {} pointed to by config {} does not exist'.format(
@@ -678,7 +678,7 @@ def _make_component_top_dir(component_var, config_obj=None):
 
 
 def get_wrf_top_dir(config_obj=None):
-    return _make_component_top_dir(WRF_TOP_DIR, config_obj)
+    return make_component_top_dir(WRF_TOP_DIR, config_obj)
 
 
 def get_wrf_run_dir(config_obj=None):
@@ -686,7 +686,7 @@ def get_wrf_run_dir(config_obj=None):
 
 
 def get_wps_top_dir(config_obj=None):
-    return _make_component_top_dir(WPS_TOP_DIR, config_obj)
+    return make_component_top_dir(WPS_TOP_DIR, config_obj)
 
 
 def get_wps_run_dir(config_obj=None):

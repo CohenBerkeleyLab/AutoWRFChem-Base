@@ -59,6 +59,9 @@ def entry_point():
     run_parser = subparsers.add_parser('run', help='Start WRF-Chem', description='Execute WRF-Chem. Exactly one of --no-mpi, --ntasks, or --alt-mpi-cmd is required')
     run_wrf_drivers.setup_clargs(run_parser)
 
+    ensemble_parser = subparsers.add_parser('ensemble', aliases=['ens'])
+    run_wrf_drivers.setup_ens_clargs(ensemble_parser)
+
     help_parser = subparsers.add_parser('help', help='Extra in-depth help')
     extra_help.setup_clargs(help_parser)
 
