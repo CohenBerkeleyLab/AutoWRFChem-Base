@@ -241,6 +241,14 @@ def _wps2wrf_dxdy(dxy, nl):
 ####################
 
 def _correct_opt_types(namelist):
+    """
+    Correct the types of the namelist options to match what they should be according to the registry
+
+    :param namelist: the namelist instance to fix
+    :type namelist: `Namelist`
+
+    :return: None, modifies ``namelist`` in place
+    """
     opts = namelist.opts
     for sect_name, section in namelist.opts.items():
         for opt_name, option in section.items():
@@ -248,8 +256,21 @@ def _correct_opt_types(namelist):
 
 
 def _update_opt_domains(namelist, trim_extra=True):
-    n_dom = namelist.max_domains
-    for optval, optname, _ in namelist.IterOpts():
+    """
+    Update options to match the number of domains defined in the namelist.
+
+    Callback function when changing 'max_dom'
+
+    :param namelist: the `Namelist` instance to modify.
+    :type namelist: `Namelist`
+
+    :param trim_extra: optional, controls whether extra values are removed when there are too many values for the number
+     of domains defined in the namelist.
+    :type trim_extra: bool
+
+    :return: None, modifies ``namelist`` in place
+    """
+    for optval, optname, _ in namelist.iter_opts():
         try:
             reg_opt = namelist.lookup_opt_in_registry(optname)
         except KeyError:
@@ -297,16 +318,36 @@ class Namelist(object):
 
     @property
     def max_domains(self):
+        """
+        The number of domains set in the namelist
+
+        :rtype: int
+        """
         return self.get_opt_val_no_sect('max_dom', domainnum=1)
 
     @property
     def has_changed(self):
         """
         Has this namelist changed since instantiation?
+
+        :rtype: bool
         """
         return self.opts != self._original_opts
 
     def __init__(self, namelist_file, registry):
+        """
+        This class represents a namelist.
+
+        This class is the base class for WRF-type namelists. Specific programs' namelists will have a subclass that
+        implements certain methods specific to them.
+
+        :param namelist_file: the namelist file to read in
+        :type namelist_file: str
+
+        :param registry: a `Registry` instance which describes which options are per-domain and which are not, and what
+         Fortran type each option is.
+        :type registry: `Registry`
+        """
         if not os.path.isfile(namelist_file):
             raise NamelistReadingError('Namelist file {} does not exist'.format(namelist_file))
         self._registry = copy.deepcopy(registry)
@@ -318,16 +359,42 @@ class Namelist(object):
 
         self._original_opts = copy.deepcopy(self.opts)
 
-    def IterOpts(self):
+    def iter_opts(self):
+        """
+        Iterate over the options in the namelist
+
+        :return: iterable of (option value, option name, section name) tuples
+        """
         for sect_name, sect_dict in self.opts.items():
             for opt_name, opt_val in sect_dict.items():
                 yield opt_val, opt_name, sect_name
 
     @classmethod
     def read_namelist(cls, namelist_file):
+        """
+        Read a namelist file
+
+        :param namelist_file: the file to read
+        :type namelist_file: str
+
+        :return: an dict-like object that representing the namelist
+        :rtype: `f90nml.Namelist`
+        """
         return f90nml.read(namelist_file)
 
     def write_namelist(self, out_filename, is_temporary=False):
+        """
+        Write the namelist file
+
+        :param out_filename: the filename to write to
+        :type out_filename: str
+
+        :param is_temporary: optional, if ``True`` then a warning comment to prepended to the top of the namelist
+         warning the user that any changes they make to that file will be overwritten.
+        :type is_temporary: bool
+
+        :return: None
+        """
         # TODO: find a way to preserve comments
         # Have had some very weird behavior when trying to patch namelists, so for now we just overwrite them each
         # time
@@ -340,7 +407,19 @@ class Namelist(object):
                 nlfile.write(msg + '\n')
             self.opts.write(nlfile)
 
-    def format_opt_val_for_writing(self, optname, optvals):
+    def format_opt_val_for_printing(self, optname, optvals):
+        """
+        Format an option for pretty printing
+
+        :param optname: the option name
+        :type optname: str
+
+        :param optvals: the option value(s)
+        :type optvals: list
+
+        :return: the formatted string for printing
+        :rtype: str
+        """
         def roundto(x, n):
             m = n - (x % n)
             m = 0 if m == n else m
@@ -408,7 +487,16 @@ class Namelist(object):
         """
         pass
 
-    def TimedeltaHMS(self, td):
+    def time_delta_hms(self, td):
+        """
+        Convert a given timedelta to the hours, minutes, and seconds components
+
+        :param td: the timedelta to convert
+        :type td: `datetime.timedelta`
+
+        :return: the hours, minutes, and seconds
+        :rtype: int, int, int
+        """
         seconds = td.seconds
         hour = int(math.floor(seconds/3600))
         seconds = seconds % 3600
@@ -416,7 +504,16 @@ class Namelist(object):
         seconds = int(seconds % 60)
         return hour, minutes, seconds
 
-    def IsOptInNamelist(self, optname):
+    def is_opt_in_namelist(self, optname):
+        """
+        Check if the given option is in the namelist, in any section
+
+        :param optname: the option to check for
+        :type optname: str
+
+        :return: ``True`` if the option is in the namelist, ``False`` otherwise.
+        :rtype: bool
+        """
         # Loops through all the options in the namelist and
         # checks if the specified one is there.
         for sect in self.opts:
@@ -427,7 +524,19 @@ class Namelist(object):
 
         return False
 
-    def IsOptInSection(self, sectname, optname):
+    def is_opt_in_section(self, sectname, optname):
+        """
+        Check if the given option is in the given section
+
+        :param sectname: the section to see if the option is in
+        :type sectname: str
+
+        :param optname: the option to check for
+        :type optname: str
+
+        :return: ``True`` if the option is in the given section, ``False`` otherwise (even if it is in another section)
+        :rtype: bool
+        """
         # Much simpler check function that returns true if the option is
         # in the specified section, false otherwise. However, we will check
         # that a valid section is specified first.
@@ -442,8 +551,16 @@ class Namelist(object):
 
         return False
 
-    def IsSectionInNamelist(self, sectname):
-        # Checks if the given section name exists in the namelist
+    def is_section_in_namelist(self, sectname):
+        """
+        Checks if the given section name exists in the namelist
+
+        :param sectname: the name of the section to check for
+        :type sectname: str
+
+        :return: ``True`` if the section is in the namelist, ``False`` otherwise
+        :rtype: bool
+        """
         for sect in self.opts:
             if sect == sectname:
                 return True
@@ -451,6 +568,15 @@ class Namelist(object):
         return False
 
     def is_option_per_domain(self, optname):
+        """
+        Test if an option has one value per domain or just one value for the model
+
+        :param optname: the name of the option to check.
+        :type optname: str
+
+        :return: if the option is per domain
+        :rtype: bool
+        """
         reg_opt = self.lookup_opt_in_registry(optname)
         return reg_opt['num_entries'] == 'max_domains'
 
@@ -468,7 +594,7 @@ class Namelist(object):
 
         found_in = []
         for sect in self.opts:
-            if self.IsOptInSection(sect, optname):
+            if self.is_opt_in_section(sect, optname):
                 found_in.append(sect)
 
         if len(found_in) == 1:
@@ -479,6 +605,25 @@ class Namelist(object):
             raise NamelistKeyError('Option {} found in multiple sections: {}'.format(optname, ', '.join(found_in)))
 
     def match_option_length_to_domains(self, optval, error_if_too_long=False, trim_extra=True):
+        """
+        Extend or contract the option to the right number of values for the current number of domains in the namelist.
+
+        This method will always make the option have the same number of the values as the number of domains. If the
+        value needs to be expanded, the last value in ``optval`` will be repeated.
+
+        To intelligently modify the length only if the option is a per-domain option, use
+        `smart_match_option_length_to_domains`.
+
+        :param optval: the option to modify. May be a single value or a list of values.
+
+        :param error_if_too_long: optional, if ``True``, will raise an error if the option has more values than the
+         number of domains. Default is ``False``.
+
+        :param trim_extra: controls if extra values (beyond the number of domains) are removed (``True``, default). If
+         ``False`` either the values are left alone or an error is raised, depending on the value of
+         ``error_if_too_long``.
+        :return:
+        """
         n_dom = self.max_domains
         if not isinstance(optval, list):
             optval = [optval]
@@ -565,6 +710,10 @@ class Namelist(object):
          resized.
         :type resize_if_needed: bool
 
+        :param convert_type_if_needed: optional, controls whether an error is raised if the value is the wrong type
+         (``False``, default) or automatically converted to the correct type if possible (``True``).
+        :type convert_type_if_needed: bool
+
         :return: the values after converting types and resizing, if applicable
         :raises NamelistKeyError: if the given option cannot be found in the given section
         :raises NamelistFormatError: if the given option has the wrong number of values
@@ -643,7 +792,7 @@ class Namelist(object):
         if domainnum is not None:
             domainnum -= 1  # convert 1-based domain to 0-based list index
 
-        if not self.IsOptInSection(sectname, optname):
+        if not self.is_opt_in_section(sectname, optname):
             raise KeyError("Could not find the option {0}".format(optname))
 
         val = self.opts[sectname][optname]
@@ -714,10 +863,10 @@ class WrfNamelist(Namelist):
         # Is gfdda_end_h an option in the namelist? If not, we don't need to see if it should be updated with the run
         # time
         self.update_fdda_end = False
-        if self.IsOptInNamelist("gfdda_end_h"):
+        if self.is_opt_in_namelist("gfdda_end_h"):
             # Compare the end time to the run time. If they are close (within 1 hr) then it is likely that the FDDA end
             # time was meant to be the same as the run time (i.e. use FDDA for the entire run).
-            rtime = self.GetRunTime(runtime_unit="hours")
+            rtime = self.get_run_time(runtime_unit="hours")
             gfdda_end = float(self.get_opt_val("fdda", "gfdda_end_h", domainnum=1))
             if abs(rtime - gfdda_end) < 1.0:
                 self.update_fdda_end = True
@@ -728,9 +877,15 @@ class WrfNamelist(Namelist):
         """
         Set the time period for the WRF namelist
 
-        :param start_date: the date for the start of the
-        :param end_date:
-        :return:
+        :param start_date: the date for the start of the time period. If given as a `datetime`, all parts (year, month,
+         day, hour, minute, and second) are set. If a `date`, then year, month, and day are set from it, and hour,
+         minute, and second are set to 0. If a `timedelta`, it is set to the current start date + the given time delta.
+        :type start_date: `datetime.datetime`, `datetime.date`, `datetime.timedelta`
+
+        :param end_date: the date for the end of the time period. Same behavior as start_date.
+        :type end_date: `datetime.datetime`, `datetime.date`, `datetime.timedelta`
+
+        :return: None
         """
         curr_start, curr_end = self.get_time_period()
         if start_date is None:
@@ -768,7 +923,7 @@ class WrfNamelist(Namelist):
 
         run_td = end_date - start_date
         self.set_opt_val("time_control", "run_days", run_td.days)
-        hms = self.TimedeltaHMS(run_td)
+        hms = self.time_delta_hms(run_td)
         self.set_opt_val("time_control", "run_hours", hms[0])
         self.set_opt_val("time_control", "run_minutes", hms[1])
         self.set_opt_val("time_control", "run_seconds", hms[2])
@@ -776,13 +931,16 @@ class WrfNamelist(Namelist):
         # Keep the FDDA end time the same as the run time (if desired) so that FDDA nudging is used through the whole
         # model run
         if self.update_fdda_end:
-            run_time = int(math.ceil(self.GetRunTime(runtime_unit="hours")))
+            run_time = int(math.ceil(self.get_run_time(runtime_unit="hours")))
             self.set_opt_val("fdda", "gfdda_end_h", run_time)
 
     def get_time_period(self):
-        # Returns start and end dates as datetime objects and the runtime
-        # in days as a float. Can override the runtime unit to be "days",
-        # "hours", "minutes", or "seconds"
+        """
+        Get the current time period set in the WRF namelist.
+
+        :return: start date and end date
+        :rtype: `datetime.datetime`, `datetime.datetime`
+        """
         sy = int(self.get_opt_val("time_control", "start_year", domainnum=1))
         sm = int(self.get_opt_val("time_control", "start_month", domainnum=1))
         sd = int(self.get_opt_val("time_control", "start_day", domainnum=1))
@@ -802,7 +960,17 @@ class WrfNamelist(Namelist):
 
         return start_date, end_date
 
-    def GetRunTime(self, runtime_unit="days"):
+    def get_run_time(self, runtime_unit="days"):
+        """
+        The the overall model run time.
+
+        :param runtime_unit: what unit of time to return the run time in. One of "days", "hours", "minutes", or
+         "seconds"
+        :type runtime_unit: str
+
+        :return: the runtime
+        :rtype: float
+        """
         rdays = float(self.get_opt_val("time_control", "run_days", domainnum=1))
         rhrs = float(self.get_opt_val("time_control", "run_hours", domainnum=1))
         rmins = float(self.get_opt_val("time_control", "run_minutes", domainnum=1))
@@ -838,6 +1006,19 @@ class WpsNamelist(Namelist):
     callbacks = {'max_dom': _update_opt_domains}
 
     def set_time_period(self, start_date, end_date):
+        """
+        Set the time period for the WRF namelist
+
+        :param start_date: the date for the start of the time period. If given as a `datetime`, all parts (year, month,
+         day, hour, minute, and second) are set. If a `date`, then year, month, and day are set from it, and hour,
+         minute, and second are set to 0. If a `timedelta`, it is set to the current start date + the given time delta.
+        :type start_date: `datetime.datetime`, `datetime.date`, `datetime.timedelta`
+
+        :param end_date: the date for the end of the time period. Same behavior as start_date.
+        :type end_date: `datetime.datetime`, `datetime.date`, `datetime.timedelta`
+
+        :return: None
+        """
         curr_start, curr_end = self.get_time_period()
         if start_date is None:
             start_date = curr_start
@@ -864,18 +1045,33 @@ class WpsNamelist(Namelist):
         self.set_opt_val("share", "end_date", end_string)
 
     def get_time_period(self):
+        """
+        Get the current time period set in the WRF namelist.
+
+        :return: start date and end date
+        :rtype: `datetime.datetime`, `datetime.datetime`
+        """
         # Returns the start and end dates as datetime objects. Currently just returns the first domain time period
         # since this has been set up really for a single domain run.
         start_string = self.get_opt_val_no_sect("start_date", 1)
         end_string = self.get_opt_val_no_sect("end_date", 1)
 
-        start_date = WpsNamelist.ConvertDate(start_string)
-        end_date = WpsNamelist.ConvertDate(end_string)
+        start_date = WpsNamelist.convert_date(start_string)
+        end_date = WpsNamelist.convert_date(end_string)
 
         return start_date, end_date
 
     @staticmethod
-    def ConvertDate(date_in):
+    def convert_date(date_in):
+        """
+        Convert the WPS-style date strings to datetime objects
+
+        :param date_in: the WPS date string
+        :type date_in: str
+
+        :return: the WPS date as a datetime object
+        :rtype: `datetime.datetime
+        """
         in_split = date_in.split("_")
         date_parts = [int(p.replace("'", "")) for p in in_split[0].split("-")]
         if len(in_split) > 1:
@@ -884,14 +1080,37 @@ class WpsNamelist(Namelist):
             time_parts = [0, 0, 0]
         return dt.datetime(date_parts[0], date_parts[1], date_parts[2], time_parts[0], time_parts[1], time_parts[2])
 
-    def SetMapProj(self, map_proj, neiproj=False):
+    def set_map_proj(self, map_proj, neiproj=False):
+        """
+        Set the WPS map projection.
+
+        Also adjusts which options are in the namelist to match the required options for that projection.
+
+        :param map_proj: which projection to set
+        :type map_proj: str
+
+        :param neiproj: optional, controls whether the map projection should be compatible with NEI emissions
+        :type neiproj: bool
+
+        :return: None
+        """
         # Special method to set map projection; needed since changing the projection
         # alters what other options should be present in geogrid
         # Setting neiproj to true will alter the messages printed if options are changed.
         self.set_opt_val("geogrid", "map_proj", map_proj)
-        self.AdjustMapProjOpts(map_proj, neiproj)
+        self.adjust_map_proj_opts(map_proj, neiproj)
 
-    def MapProjOptions(self, map_proj):
+    def map_proj_options(self, map_proj):
+        """
+        List the required options of a given map projection
+
+        :param map_proj: which map projection to list options for
+        :type map_proj: str
+
+        :return: the list of options required for the given projection and the list of all options that apply to the
+         map projections.
+        :rtype: two tuples of str
+        """
         # Returns the necessary lat/lon settings for a given map projection as the first tuple
         # Returns all options specific to different projections as the second.
         all_opts = ("truelat1", "truelat2", "stand_lon", "pole_lat", "pole_lon")
@@ -909,10 +1128,21 @@ class WpsNamelist(Namelist):
 
         return proj_opts, all_opts
 
-    def AdjustMapProjOpts(self, map_proj, neiproj=False):
+    def adjust_map_proj_opts(self, map_proj, neiproj=False):
+        """
+        Modify the list of options in the WPS namelist to that required for the given map projection
+
+        :param map_proj: the map projection
+        :type map_proj: str
+
+        :param neiproj: optional, controls whether the map projection should be compatible with NEI emissions
+        :type neiproj: bool
+
+        :return: None
+        """
         # Returns true if adjustment succeeded, false otherwise
         # Setting neiproj to true will alter the messages printed if options are changed.
-        proj_opts, all_opts = self.MapProjOptions(map_proj)
+        proj_opts, all_opts = self.map_proj_options(map_proj)
         # All these options are in the "geogrid" section
         curr_opts = self.opts["geogrid"].keys()
         opt_added = False
@@ -1541,7 +1771,7 @@ class NamelistContainer:
         optval = uiel.user_input_list("Choose a map projection: ", proj_list, printcols=False,
                                       currentvalue=self.wps_namelist.get_opt_val_no_sect("map_proj", 1))
         if optval is not None:
-            self.wps_namelist.SetMapProj(optval, neionly)
+            self.wps_namelist.set_map_proj(optval, neionly)
 
     def GetTypeList(self, list_file):
         # TODO: unneeded? or update to work with config files?
@@ -1704,10 +1934,10 @@ class NamelistContainer:
 
                     if len(optname) == 0:
                         msg_print("   Warning reading {1}: no option name before the = in line {0}".format(line_num, list_shortfile))
-                    elif not nl.IsSectionInNamelist(optsect):
+                    elif not nl.is_section_in_namelist(optsect):
                         msg_print("   Warning reading {0}: {1} is not a valid {2} namelist section (line {3})".
                               format(list_shortfile, optsect, optid[0], line_num))
-                    elif not nl.IsOptInSection(optsect, optname):
+                    elif not nl.is_opt_in_section(optsect, optname):
                         msg_print("   Warning reading {0}: {1}:{2} is an unknown {3} namelist section/option pair (line {4})".
                               format(list_shortfile, optsect, optname, optid[0], line_num, ))
                     elif optname == "chem_opt":
@@ -2027,10 +2257,10 @@ class NamelistContainer:
             for s in namelist.opts.keys():
                 msg_print("{0}:".format(s))
                 for k,v in namelist.opts[s].items():
-                    msg_print(namelist.format_opt_val_for_writing(k, v))
+                    msg_print(namelist.format_opt_val_for_printing(k, v))
         elif sect is not None:
             for k,v in namelist.opts[sect].items():
-                msg_print(namelist.format_opt_val_for_writing(k, v))
+                msg_print(namelist.format_opt_val_for_printing(k, v))
 
     def user_nei_compat_check(self):
         """
@@ -2051,11 +2281,11 @@ class NamelistContainer:
         wrf_expect_opt = ["io_form_auxinput5", "io_style_emissions", "emiss_inpt_opt", "kemit"]
         missing_opts = False
         for opt in wps_expect_opt:
-            if not self.wps_namelist.IsOptInNamelist(opt):
+            if not self.wps_namelist.is_opt_in_namelist(opt):
                 msg_print("Option {0} not found in WPS namelist".format(opt))
                 missing_opts = True
         for opt in wrf_expect_opt:
-            if not self.wrf_namelist.IsOptInNamelist(opt):
+            if not self.wrf_namelist.is_opt_in_namelist(opt):
                 msg_print("Option {0} not found in WRF namelist".format(opt))
                 missing_opts = True
 
