@@ -6,6 +6,8 @@
 *.cfg
 # Ignore backups
 *backup*
+# Ignore the generated 'awc' executable file
+awc
 
 # Ignore the non-template namelists
 CONFIG/namelist.input
