@@ -269,10 +269,13 @@ def _parse_time_string_colon(time_str):
 def _iter_reinit_dirs(wrf_run_dir, model_start_time, model_end_time, reinit_freq):
     curr_time = model_start_time
 
-    while curr_time <= model_end_time:
+    # exit once the current time is >= the model end time. This assumes that if
+    # the curr_time == model_end_time, then the model end time is covered by the
+    # previous subrun. That's a fairly good assumption, since the only way it
+    # wouldn't be true is if the reinit run time was 0, which is useless.
+    while curr_time < model_end_time:
         reinit_dir = 'Reinit-{}'.format(curr_time.strftime('%Y-%m-%d_%H:%M:%S'))
         reinit_dir = os.path.join(wrf_run_dir, reinit_dir)
-        _prep_reinit_dir(reinit_dir)
         yield reinit_dir, curr_time
         curr_time += reinit_freq
 

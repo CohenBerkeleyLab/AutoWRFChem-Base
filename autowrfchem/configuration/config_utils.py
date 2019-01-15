@@ -10,7 +10,7 @@ import re
 import subprocess
 
 from .. import automation_top_dir, common_utils
-from . import ENVIRONMENT, AUTOMATION, AUTOMATION_PATHS, WRF_TOP_DIR, WPS_TOP_DIR
+from . import ENVIRONMENT, AUTOMATION, AUTOMATION_PATHS, WRF_TOP_DIR, WPS_TOP_DIR, RUNTIME, REINIT_FREQ, REINIT_RUN_TIME
 
 
 from .. import config_dir, config_defaults_dir, ui
@@ -677,6 +677,14 @@ def make_component_top_dir(component_var, config_obj=None):
     return component_dir
 
 
+def _get_duration_config(section, option, config_obj=None):
+    if config_obj is None:
+        config_obj = AutoWRFChemConfig()
+
+    optval = config_obj[section][option]
+    return common_utils.parse_time_string(optval)
+
+
 def get_wrf_top_dir(config_obj=None):
     return make_component_top_dir(WRF_TOP_DIR, config_obj)
 
@@ -691,3 +699,9 @@ def get_wps_top_dir(config_obj=None):
 
 def get_wps_run_dir(config_obj=None):
     return get_wps_top_dir(config_obj)
+
+def get_reinit_freq(config_obj=None):
+    return _get_duration_config(RUNTIME, REINIT_FREQ, config_obj)
+
+def get_reinit_runtime(config_obj=None):
+    return _get_duration_config(RUNTIME, REINIT_RUN_TIME, config_obj)

@@ -84,6 +84,9 @@ def _date_of_rst_file(rst_files, namelist_container):
 
 
 def _run_wrf_once(wrf_dir, ntasks, dry_run=False, config_obj=None):
+    
+    _check_for_missing_files(wrf_dir, config_obj)
+
     if ntasks > 0:
         # when WRF runs under MPI it automatically saves terminal from each task to an rsl.{out,error}.NNNN file so
         # we don't need to make a log file ourselves
@@ -98,11 +101,11 @@ def _run_wrf(wrf_dir, ntasks, dry_run=False, config_obj=None):
     if config_obj is None:
         config_obj = config_utils.AutoWRFChemConfig()
 
-    if not config_obj[RUNTIME][DO_REINIT]:
+    if not config_obj[RUNTIME].as_bool(DO_REINIT):
         return _run_wrf_once(wrf_dir, ntasks, dry_run=dry_run, config_obj=config_obj)
 
-    reinit_freq = config_obj[RUNTIME][REINIT_FREQ]
-    reinit_run_time = config_obj[RUNTIME][REINIT_RUN_TIME]
+    reinit_freq = config_utils.get_reinit_freq(config_obj)
+    reinit_run_time = config_utils.get_reinit_runtime(config_obj)
 
     nlc = awclib.NamelistContainer.load_namelists()
     model_start_time, model_end_time = nlc.get_time_period()
@@ -173,7 +176,6 @@ def drive_wrf_execution(ntasks=1, wrf_dir=None, rst=False, require_rst_file=Fals
         wrf_dir = config_utils.get_wrf_run_dir(config_obj)
 
     try:
-        _check_for_missing_files(wrf_dir, config_obj)
         if not no_sync_namelist:
             awclib.NamelistContainer.clear_temp_changes(config_obj=config_obj)
         _set_model_run_time(wrf_dir, rst, require_rst_file, run_for=run_for)
@@ -189,12 +191,10 @@ def drive_wrf_execution(ntasks=1, wrf_dir=None, rst=False, require_rst_file=Fals
 
 
 def drive_ens_execution(create_config=None, submit=None, dry_run=False):
-    import pdb
 
     if create_config is not None:
         ensembles.create_new_ens_cfg_file(create_config)
     elif submit is not None:
-        pdb.set_trace()
         ensembles.build_ens_dirs(submit)
         ensembles.submit_ens_runs(submit, config_utils.AutoWRFChemConfig(), dry_run=dry_run)
 
