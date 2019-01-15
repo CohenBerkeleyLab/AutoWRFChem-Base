@@ -3,11 +3,13 @@ from __future__ import print_function, absolute_import, division, unicode_litera
 from datetime import datetime as dtime
 from glob import glob
 import os
+import shutil
 from subprocess import CalledProcessError
 
 from .. import common_utils, wrf_date_fmt, _pretty_n_col
-from ..configuration import autowrf_classlib as awclib, config_utils
+from ..configuration import autowrf_classlib as awclib, config_utils, RUNTIME, DO_REINIT, REINIT_FREQ, REINIT_RUN_TIME
 from . import ensembles
+
 
 class WRFRunError(Exception):
     """
@@ -81,7 +83,7 @@ def _date_of_rst_file(rst_files, namelist_container):
     return restart_dates[0]
 
 
-def _run_wrf(wrf_dir, ntasks, dry_run=False, config_obj=None):
+def _run_wrf_once(wrf_dir, ntasks, dry_run=False, config_obj=None):
     if ntasks > 0:
         # when WRF runs under MPI it automatically saves terminal from each task to an rsl.{out,error}.NNNN file so
         # we don't need to make a log file ourselves
@@ -90,6 +92,60 @@ def _run_wrf(wrf_dir, ntasks, dry_run=False, config_obj=None):
         with open(os.path.join(wrf_dir, 'wrfrun.log'), 'w') as logfile:
             common_utils.run_external('./wrf.exe', config_obj, cwd=wrf_dir, logfile_handle=logfile,
                                       dry_run=dry_run)
+
+
+def _run_wrf(wrf_dir, ntasks, dry_run=False, config_obj=None):
+    if config_obj is None:
+        config_obj = config_utils.AutoWRFChemConfig()
+
+    if not config_obj[RUNTIME][DO_REINIT]:
+        return _run_wrf_once(wrf_dir, ntasks, dry_run=dry_run, config_obj=config_obj)
+
+    reinit_freq = config_obj[RUNTIME][REINIT_FREQ]
+    reinit_run_time = config_obj[RUNTIME][REINIT_RUN_TIME]
+
+    nlc = awclib.NamelistContainer.load_namelists()
+    model_start_time, model_end_time = nlc.get_time_period()
+
+    exec_start_time = dtime.now()
+
+    for reinit_dir, start_time in common_utils._iter_reinit_dirs(wrf_dir, model_start_time, model_end_time, reinit_freq):
+        # Reset the WRF namelist so we only run this time period
+        nlc.set_run_time(reinit_run_time, start_time)
+        nlc.wrf_namelist.write_namelist(os.path.join(wrf_dir, 'namelist.input'))
+
+        # Link all the previously prepared input files for this time period to the main run directory
+        input_files = glob(os.path.join(reinit_dir, 'wrf*'))
+        for input_file in input_files:
+            if input_file.startswith('wrfout'):
+                # Just in case there are somehow wrf output in the input directory, don't relink them
+                continue
+
+            input_file_basename = os.path.basename(input_file)
+            input_file_link = os.path.join(wrf_dir, input_file_basename)
+
+            if not dry_run:
+                if os.path.exists(input_file_link):
+                    os.remove(input_file_link)
+
+                # input_file should be an absolute path, so this shouldn't pose a problem
+                os.symlink(input_file, input_file_link)
+            else:
+                print('Would link {0} -> {1}, overwriting the first if needed'.format(input_file_link, input_file))
+
+        # TODO: make this flexible enough to submit separate jobs for each run segment, rather than all as one
+        _run_wrf_once(wrf_dir, ntasks, dry_run=dry_run, config_obj=config_obj)
+
+        # Move all newly created WRF output files to the reinit dir. Don't move files older than when this started,
+        # that would get confusing if the user left old wrfout files in the run directory
+        output_files = glob(os.path.join(wrf_dir, 'wrfout*'))
+        for out_file in output_files:
+            ctime = dtime.fromtimestamp(os.path.getctime(out_file))
+            if ctime >= exec_start_time:
+                if dry_run:
+                    print('Would move {} -> {}'.format(out_file, reinit_dir))
+                else:
+                    shutil.move(out_file, reinit_dir)
 
 
 def _set_model_run_time(wrf_dir, do_restart, require_rst_file, run_for=None):

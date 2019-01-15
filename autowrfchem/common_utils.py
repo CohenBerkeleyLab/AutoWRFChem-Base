@@ -10,6 +10,7 @@ import sys
 
 from textui import uiutils
 
+from autowrfchem import _pretty_n_col
 from .configuration import ENVIRONMENT, AUTOMATION, AUTOMATION_PATHS, MPI_CMD
 
 
@@ -263,3 +264,27 @@ def _parse_time_string_colon(time_str):
 
     hours, minutes, seconds = [int(p) for p in hms]
     return tdel(days=days, hours=hours, minutes=minutes, seconds=seconds)
+
+
+def _iter_reinit_dirs(wrf_run_dir, model_start_time, model_end_time, reinit_freq):
+    curr_time = model_start_time
+
+    while curr_time <= model_end_time:
+        reinit_dir = 'Reinit-{}'.format(curr_time.strftime('%Y-%m-%d_%H:%M:%S'))
+        reinit_dir = os.path.join(wrf_run_dir, reinit_dir)
+        _prep_reinit_dir(reinit_dir)
+        yield reinit_dir, curr_time
+        curr_time += reinit_freq
+
+
+def _prep_reinit_dir(reinit_dir):
+    if os.path.isdir(reinit_dir):
+        shutil.rmtree(reinit_dir)
+
+    os.mkdir(reinit_dir)
+    with open(os.path.join(reinit_dir, 'WARNING.txt'), 'w') as fobj:
+        fobj.write('\n'.join(uiutils.hard_wrap(
+            'WARNING: This directory is cleared when autowrfchem prepinpt is run with reinitialization enabled. '
+            'Make sure you move any input or output files you want to keep elsewhere before you rerun that!',
+            max_columns=_pretty_n_col
+        )))
