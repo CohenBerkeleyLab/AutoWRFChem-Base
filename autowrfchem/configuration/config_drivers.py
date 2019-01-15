@@ -5,7 +5,7 @@ import subprocess
 from textui import uibuilder as uib, uielements as uiel
 
 from .. import _pretty_n_col
-from ..common_utils import run_external
+from ..common_utils import run_external, eprint
 from . import  _pgrm_main_check_key, _pgrm_cfg_key, _pgrm_clargs_key, _pgrm_warn_to_choose_env, _pgrm_nl_key, \
     ENVIRONMENT, AUTOMATION, AUTOMATION_PATHS
 from . import config_utils as cu, autowrf_classlib as awclib, autowrf_namelist_main as awnlmain
@@ -374,7 +374,18 @@ run_config_menu = config_menu.attach_custom_fxn('Run WRF/WPS config scripts', _r
 config_menu.attach_submenu(awnlmain.namelist_main, 'Edit namelists and related config options')
 
 
-def drive_configuration(update_cfg=False, **cl_args):
+def _quick_sync_namelists():
+    try:
+        nlc = awclib.NamelistContainer.load_namelists(sync_priority='user')
+        nlc.save_namelists()
+    except awclib.NamelistReadingError as err:
+        eprint(err.args[0])
+        return 1
+    else:
+        return 0
+
+
+def drive_configuration(update_cfg=False, quick_sync_namelists=False, **cl_args):
     """
     Driver function to start the interactive configuration menu
 
@@ -397,6 +408,8 @@ def drive_configuration(update_cfg=False, **cl_args):
     if update_cfg:
         _update_std_config()
         return 0
+    elif quick_sync_namelists:
+        return _quick_sync_namelists()
 
     config_obj = cu.AutoWRFChemConfig()
     config_pgrm = uib.Program(config_menu)
@@ -423,6 +436,11 @@ def setup_config_clargs(parser):
     parser.add_argument('--update-cfg', action='store_true', help='Update the standard config file with any new '
                                                                   'options added to the default config file. Should '
                                                                   'only be needed after an update.')
+    parser.add_argument('-s', '--quick-sync-namelists', action='store_true',
+                        help='Quickly sync manual changes to the namelists. This will interactively prompt you to '
+                             'resolve conflicts in common options between the WRF and WPS namelists, then copy the '
+                             'persistent namelists to the run directories.')
+
     # TODO: add --namelist option to go straight to namelists and namelist subcommand
 
     parser.set_defaults(exec_func=drive_configuration)

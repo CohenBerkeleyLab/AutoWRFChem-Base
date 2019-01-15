@@ -690,7 +690,7 @@ class WrfNamelist(Namelist):
     _extra_registry_entries = {'nio_tasks_per_group':
                                 {'default': '0',
                                  'how_set': {'how': 'namelist', 'section': 'namelist_quilt'},
-                                 'num_entries': 'max_domains',
+                                 'num_entries': '1',
                                  'symbol': 'nio_tasks_per_group',
                                  'type': 'integer'
                                  },
