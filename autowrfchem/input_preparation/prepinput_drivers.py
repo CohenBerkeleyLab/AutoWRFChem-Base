@@ -8,8 +8,9 @@ from .. import common_utils, _pretty_n_col, preplogs_dir
 from ..configuration import config_utils
 from . import prep_utils, prepwps, RealExeFailedError
 
-
-_prep_fxns = OrderedDict([('real.exe', prep_utils.run_real), ('WPS', prepwps.prepwps)])
+# run_real_with_reinit internally figures out if the configuration actually indicates to run with reinitialization
+# or not.
+_prep_fxns = OrderedDict([('real.exe', prep_utils.run_real_with_reinit), ('WPS', prepwps.prepwps)])
 
 
 def decode_exit_code(ecode, print_to_screen=False):
@@ -64,6 +65,7 @@ def _setup_input_functions(met_only=False, chem_only=False):
     if met_only:
         idx = 0
         real_log_file = os.path.join(preplogs_dir, 'real.log')
+
         prep_fxn = lambda config_obj, **kwargs: _prep_fxns['real.exe'](config_obj, log_file=real_log_file, **kwargs)
         command_list.append((idx, 'real.exe', prep_fxn))
 

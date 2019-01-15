@@ -10,8 +10,8 @@ import sys
 
 from textui import uiutils
 
+from autowrfchem import _pretty_n_col
 from .configuration import ENVIRONMENT, AUTOMATION, AUTOMATION_PATHS, MPI_CMD
-from .configuration.config_utils import AutoWRFChemConfig
 
 
 wrf_date_re = re.compile(r'\d{4}-\d{2}-\d{2}_\d{2}:\d{2}:\d{2}')
@@ -48,7 +48,7 @@ def _create_env_dict(config_obj):
     return extant_env
 
 
-def run_external(command, cwd='.', config_obj=None, logfile_handle=None, dry_run=False, **subproc_args):
+def run_external(command, config_obj, cwd='.', logfile_handle=None, dry_run=False, **subproc_args):
     """
     Run an external program
 
@@ -62,8 +62,7 @@ def run_external(command, cwd='.', config_obj=None, logfile_handle=None, dry_run
     :param cwd: the working directory to use to run the command.
     :type cwd: str
 
-    :param config_obj: an `AutoWRFChemConfig` object to use to set the environment. If not given, the standard config
-     is used.
+    :param config_obj: an `AutoWRFChemConfig` object to use to set the environment.
     :type config_obj: `AutoWRFChemConfig`
 
     :param logfile_handle: a handle, returned by `open()` to a file to write a log (stdout + stderr) to.
@@ -79,8 +78,6 @@ def run_external(command, cwd='.', config_obj=None, logfile_handle=None, dry_run
     :return: None
     :raises subprocess.CalledProcessError: if the command returns a non-zero exit code.
     """
-    if config_obj is None:
-        config_obj = AutoWRFChemConfig()
 
     if isinstance(command, str):
         command = shlex.split(command)
@@ -97,7 +94,7 @@ def run_external(command, cwd='.', config_obj=None, logfile_handle=None, dry_run
         subprocess.check_call(command, cwd=cwd, env=env, **subproc_args)
 
 
-def run_external_mpi(command, ntasks=1, config_obj=None, *args, **kwargs):
+def run_external_mpi(command, config_obj, ntasks=1, *args, **kwargs):
     """
     Run an external program using MPI.
 
@@ -122,13 +119,11 @@ def run_external_mpi(command, ntasks=1, config_obj=None, *args, **kwargs):
     :raises subprocess.CalledProcessError: if the command returns a non-zero exit code.
     """
 
-    if config_obj is None:
-        config_obj = AutoWRFChemConfig()
-    elif ntasks < 1:
+    if ntasks < 1:
         raise ValueError('ntasks must be >= 1')
 
     command = config_obj[AUTOMATION][MPI_CMD].format(ntasks=ntasks, cmd=command)
-    run_external(command, config_obj=config_obj, *args, **kwargs)
+    run_external(command, config_obj, *args, **kwargs)
 
 
 def set_bit(bit, val=0, yn=True):
@@ -269,3 +264,27 @@ def _parse_time_string_colon(time_str):
 
     hours, minutes, seconds = [int(p) for p in hms]
     return tdel(days=days, hours=hours, minutes=minutes, seconds=seconds)
+
+
+def _iter_reinit_dirs(wrf_run_dir, model_start_time, model_end_time, reinit_freq):
+    curr_time = model_start_time
+
+    while curr_time <= model_end_time:
+        reinit_dir = 'Reinit-{}'.format(curr_time.strftime('%Y-%m-%d_%H:%M:%S'))
+        reinit_dir = os.path.join(wrf_run_dir, reinit_dir)
+        _prep_reinit_dir(reinit_dir)
+        yield reinit_dir, curr_time
+        curr_time += reinit_freq
+
+
+def _prep_reinit_dir(reinit_dir):
+    if os.path.isdir(reinit_dir):
+        shutil.rmtree(reinit_dir)
+
+    os.mkdir(reinit_dir)
+    with open(os.path.join(reinit_dir, 'WARNING.txt'), 'w') as fobj:
+        fobj.write('\n'.join(uiutils.hard_wrap(
+            'WARNING: This directory is cleared when autowrfchem prepinpt is run with reinitialization enabled. '
+            'Make sure you move any input or output files you want to keep elsewhere before you rerun that!',
+            max_columns=_pretty_n_col
+        )))

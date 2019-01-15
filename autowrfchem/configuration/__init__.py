@@ -10,6 +10,14 @@ MET_TOP_DIR = 'MET_TOP_DIR'
 TARGET = 'WRF_TARGET'
 MPI_CMD = 'MPI_CMD'
 
+RUNTIME = 'RUNTIME'
+DO_REINIT = 'DO_REINIT'
+REINIT_FREQ = 'REINIT_FREQ'
+REINIT_RUN_TIME = 'REINIT_RUN_TIME'
+
+HPC = 'HPC'
+SUBMIT_CMD = 'SUBMIT_CMD'
+
 _pgrm_main_check_key = 'auto_check_main'
 _pgrm_cfg_key = 'configuration'
 _pgrm_clargs_key = 'command_line_args'
