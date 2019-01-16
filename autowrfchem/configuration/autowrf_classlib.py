@@ -239,6 +239,64 @@ def _wps2wrf_dxdy(dxy, nl):
 # NAMELIST CLASSES #
 ####################
 
+
+def _wrf2wps_parent_id(parent_id, nl):
+    """
+    Convert WRF parent_id list to WPS parent_id list
+
+    If the first value in ``parent_id`` is 0, it is changed to 1 in the returned list. Otherwise, a NamelistValueError
+    is raised.
+
+    WRF and WPS seem to have different expectations for how the parent of the coarse domain is set (which has no parent
+    in fact). The WPS chapter of the user guide indicates that parent_id should be 1 for the coarse domain
+    (http://www2.mmm.ucar.edu/wrf/users/docs/user_guide_V3.9/users_guide_chap3.html#_Description_of_the_1).
+    The WRF chapter doesn't explicitly say what it should be, but it defaults to 0.
+
+    :param parent_id: the list of parent_id values, as integers
+    :type parent_id: list
+
+    :param nl: the WRF namelist
+    :type nl: `WrfNamelist`
+
+    :return: the list of parent_ids, modified to work with WPS
+    :rtype: list
+    :raises NamelistValueError: if the first value in ``parent_id`` is not 0.
+    """
+    new_parent_id = copy.copy(parent_id)
+    if new_parent_id[0] == 0:
+        new_parent_id[0] = 1
+    else:
+        raise NamelistValueError('The parent_id for the coarse domain in WRF is expected to be 0')
+
+    return new_parent_id
+
+
+def _wps2wrf_parent_id(parent_id, nl):
+    """
+    Convert WPS parent_id list to WRF parent_id list.
+
+    If the first value of ``parent_id`` is 1, it is changed to 0 in the returned list. Otherwise, a NamelistValueError
+    is raised.
+
+    :param parent_id: the list of parent_id values, as integers
+    :type parent_id: list
+
+    :param nl: the WPS namelist
+    :type nl: `WpsNamelist`
+
+    :return: the list of parent_ids, modified to work with WRF
+    :rtype: list
+    :raises NamelistValueError: if the first value in ``parent_id`` is not 1.
+    """
+    new_parent_id = copy.copy(parent_id)
+    if new_parent_id[0] == 1:
+        new_parent_id[0] = 0
+    else:
+        raise NamelistValueError('The parent_id for the coarse domain in WPS must be 1')
+
+    return new_parent_id
+
+
 def _correct_opt_types(namelist):
     """
     Correct the types of the namelist options to match what they should be according to the registry
@@ -1199,7 +1257,8 @@ class NamelistContainer:
     # Functions used to convert specific options from WRF to WPS or vice versa. The key is the option, the value is a
     # tuple of functions where the first converts WRF -> WPS and the second is WPS -> WRF. The functions are given the
     # value to be converted and the namelist it comes from.
-    _sync_prep_fxns = {'dx': (_wrf2wps_dxdy, _wps2wrf_dxdy), 'dy': (_wrf2wps_dxdy, _wps2wrf_dxdy)}
+    _sync_prep_fxns = {'dx': (_wrf2wps_dxdy, _wps2wrf_dxdy), 'dy': (_wrf2wps_dxdy, _wps2wrf_dxdy),
+                       'parent_id': (_wrf2wps_parent_id, _wps2wrf_parent_id)}
 
     # Options that may not be set directly
     # TODO: make it so that changing a domain or date opt manually just keeps WRF and WPS in sync, and a met opt issues
@@ -1268,14 +1327,21 @@ class NamelistContainer:
         all_wps = 'Use WPS (and for all following options)'
         ignore = 'Do not sync'
 
-        def ask_user_behavior(option_name, wrf_val, wps_val):
-            prompt = '{opt} differs between WRF ({wrf}) and WPS ({wps}) namelists.\n' \
-                     'How do you want to synchronize them?'.format(opt=option_name,
-                                                                   wrf=', '.join([str(v) for v in wrf_val]),
-                                                                   wps=', '.join([str(v) for v in wps_val]))
+        def ask_user_behavior(option_name, wrf_val, wps_val, expected_wps_val):
+            if expected_wps_val == wrf_val:
+                prompt = '{opt} differs between WRF ({wrf}) and WPS ({wps}) namelists.\n' \
+                         'How do you want to synchronize them?'.format(opt=option_name,
+                                                                       wrf=', '.join([str(v) for v in wrf_val]),
+                                                                       wps=', '.join([str(v) for v in wps_val]))
+            else:
+                prompt = '{opt} differs between WRF ({wrf}) and WPS ({wps}, expected {expected}) namelists.\n' \
+                         'How do you want to synchronize them?'.format(opt=option_name,
+                                                                       wrf=', '.join([str(v) for v in wrf_val]),
+                                                                       wps=', '.join([str(v) for v in wps_val]),
+                                                                       expected=', '.join([str(v) for v in expected_wps_val]))
             return uiel.user_input_list(prompt, [this_wrf, this_wps, all_wrf, all_wps, ignore], emptycancel=False)
 
-        def choose_new_val(option_name, wrf_val, wps_val):
+        def choose_new_val(option_name, wrf_val, wps_val, expected_wps_val):
 
             if priorities['wrf']:
                 new_val = self.wrfopt_to_wpsopt(option_name, wrf_val)
@@ -1284,7 +1350,7 @@ class NamelistContainer:
                 new_val = self.wpsopt_to_wrfopt(option_name, wps_val)
                 nl = self.wrf_namelist
             elif interactive:
-                user_rsp = ask_user_behavior(option_name, wrf_val, wps_val)
+                user_rsp = ask_user_behavior(option_name, wrf_val, wps_val, expected_wps_val)
                 if user_rsp == this_wrf or user_rsp == all_wrf:
                     new_val = self.wrfopt_to_wpsopt(option_name, wrf_val)
                     nl = self.wps_namelist
@@ -1310,15 +1376,17 @@ class NamelistContainer:
         wrf_dates = self.wrf_namelist.get_time_period()
         wps_dates = self.wps_namelist.get_time_period()
         if wrf_dates != wps_dates:
-            new_val, dest_namelist = choose_new_val('Start and end date', wrf_dates, wps_dates)
+            new_val, dest_namelist = choose_new_val('Start and end date', wrf_dates, wps_dates, wrf_dates)
             if new_val is not None:
                 dest_namelist.set_time_period(*new_val)
 
         for optname in self.sync_options:
             wrf_val = self.wrf_namelist.get_opt_val_no_sect(optname)
+            expected_wps_val = self.wrfopt_to_wpsopt(optname, wrf_val)
             wps_val = self.wps_namelist.get_opt_val_no_sect(optname)
-            if self.wrfopt_to_wpsopt(optname, wrf_val) != wps_val:
-                new_val, dest_namelist = choose_new_val(optname, wrf_val, wps_val)
+            if expected_wps_val != wps_val:
+                pdb.set_trace()
+                new_val, dest_namelist = choose_new_val(optname, wrf_val, wps_val, expected_wps_val)
                 if new_val is not None:
                     dest_namelist.set_opt_val_no_sect(optname, new_val)
 

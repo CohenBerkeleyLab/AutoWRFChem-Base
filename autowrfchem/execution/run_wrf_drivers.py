@@ -263,7 +263,7 @@ def setup_ens_clargs(enspar):
                         help='Overwrite existing directories when creating ensemble run directories')
     enspar.add_argument('-i', '--ignore-if-done', action='store_true', help='Do not submit a job to run an ensemble '
                                                                             'member that has finished.')
-    enspar.add_argument('--dry-run', action='store_true', help='For --submit, do not actually submit the jobs, just'
+    enspar.add_argument('--dry-run', action='store_true', help='For --submit, do not actually submit the jobs, just '
                                                                'create the directories and the submit scripts.')
 
     enspar.set_defaults(exec_func=drive_ens_execution)

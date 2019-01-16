@@ -60,13 +60,21 @@ def create_new_ens_cfg_file(filename):
 
     cfg[_ens_top_dir_key] = ''
     cfg.comments[_ens_top_dir_key] = """\n# This is the directory where all the ensemble
-# run directories will be created.""".split('\n')
+# run directories will be created. If given as a relative
+# path, it will be relative to the top of the AutoWRFChem 
+# repo.""".split('\n')
+
+    cfg[_ens_mode_key] = 'explicit'
+    cfg.comments[_ens_mode_key] = """\n# This controls how the ensemble is built. See
+# the top comment for more information.""".split('\n')
 
     cfg[_ens_sub_file_key] = ''
     cfg.comments[_ens_sub_file_key] = """\n# This is a template submit script that will be
 # used to submit the ensemble members. {jobname} will be
 # replaced with a custom job name and {exec} (required) 
-# will be replaced with the execute command""".split('\n')
+# will be replaced with the execute command. If given as
+# a relative path, it will be relative to the top of the
+# AutoWRFChem repo.""".split('\n')
 
     cfg[_ens_sub_opt_key] = '--ntasks=1'
     cfg.comments[_ens_sub_opt_key] = """\n# This specifies extra command line arguments for
@@ -100,6 +108,15 @@ def _create_ens_run_dir(dir_path, template_wrf_dir, excludes=(r'met_em.*', r'wrf
 
         src = os.path.abspath(os.path.join(template_wrf_dir, f))
         dst = os.path.join(dir_path, f)
+
+        # If f is a reinit directory created for running AutoWRFChem in reinit mode, then we need to be careful how we
+        # handle it. We can't just link it, because we move output files into it as they complete, which means that if
+        # multiple ensemble members link to the same template directory, they'll end up overwriting each others' output
+        # files. Instead we need to actually create that directory and link all the files inside it. Conveniently, we
+        # can recurse because that's exactly what we're doing right now.
+        if re.match(r'Reinit-\d\d\d\d-\d\d-\d\d_\d\d:\d\d:\d\d', f):
+            _create_ens_run_dir(dst, src, excludes=excludes)
+
         os.symlink(src, dst)
 
 
