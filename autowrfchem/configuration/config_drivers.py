@@ -75,7 +75,7 @@ def _check_config_state_hook(pgrm_data, force_check=False, is_exit=False):
     else:
         uiel.user_message('\nNo issues detected.')
 
-    if is_exit:
+    if is_exit and fixes_needed:
         return uiel.user_input_yn('\nThere are remaining issues with the configuration.\n'
                                       'Return to the menu to correct them?', currentvalue="n")
     else:

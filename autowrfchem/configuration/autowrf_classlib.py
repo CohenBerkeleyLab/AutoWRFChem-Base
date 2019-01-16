@@ -220,7 +220,6 @@ def _wps2wrf_dxdy(dxy, nl):
         this_parent_ind = this_parent - 1
         parent_dxy = dxy_out[this_parent_ind]
         if parent_dxy < 0:
-            pdb.set_trace()
             set_domain_dxy(this_parent)
             parent_dxy = dxy_out[this_parent_ind]
 

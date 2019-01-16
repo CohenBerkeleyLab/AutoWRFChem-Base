@@ -3,11 +3,13 @@ from __future__ import print_function, absolute_import, division, unicode_litera
 from configobj import ConfigObj
 import os
 import re
+import shutil
 import sys
 
 from .. import _pkg_dir, common_utils
 from ..configuration import config_utils, autowrf_classlib as awclib
 from ..configuration import HPC, SUBMIT_CMD
+from . import run_utils
 
 import pdb
 
@@ -37,6 +39,13 @@ class EnsembleError(Exception):
 class BadEnsConfigError(EnsembleError):
     """
     Error to use if there's a problem with the ensemble configuration
+    """
+    pass
+
+
+class EnsembleCreationError(EnsembleError):
+    """
+    Error to use if there's a problem creating the ensemble
     """
     pass
 
@@ -82,7 +91,7 @@ def _iter_ens_members(cfg):
         yield sect_name, ens_dir, sect
 
 
-def _create_ens_run_dir(dir_path, template_wrf_dir, excludes=(r'met_em.*', r'wrfout.*', r'namelist\.input.*')):
+def _create_ens_run_dir(dir_path, template_wrf_dir, excludes=(r'met_em.*', r'wrfout.*', r'namelist\.input.*',r'rsl.*')):
     os.mkdir(dir_path)
     template_files = os.listdir(template_wrf_dir)
     for f in template_files:
@@ -98,7 +107,7 @@ def _ens_namelist_file(ens_dir, ens_name):
     return os.path.join(ens_dir, 'namelist.input.{}'.format(ens_name))
 
 
-def build_ens_dirs(cfg_file):
+def build_ens_dirs(cfg_file, overwrite=False):
     cfg = ConfigObj(cfg_file)
     template_wrf_dir = config_utils.get_wrf_run_dir()
 
@@ -109,6 +118,12 @@ def build_ens_dirs(cfg_file):
 
     for ens_name, ens_dir, section in _iter_ens_members(cfg):
 
+        if os.path.isdir(ens_dir):
+            if overwrite:
+                print('Removing existing ensemble directory:', ens_dir)
+                shutil.rmtree(ens_dir)
+            else:
+                raise EnsembleCreationError('{} already exists. Use --overwrite-dirs if you want to replace it'.format(ens_dir))
         _create_ens_run_dir(ens_dir, template_wrf_dir)
 
         nlc = awclib.NamelistContainer.load_namelists()
@@ -124,7 +139,8 @@ def submit_ens_runs(cfg_file, awc_config, ignore_if_done=True, dry_run=False):
     submit_template = config_utils.rel_dir_to_abs(cfg[_ens_sub_file_key])
     run_args = cfg[_ens_sub_opt_key]
 
-    # write the submit scripts to the directory containing the autowrfchem package. this way it can be found
+    # write the submit scripts to the directory containing the autowrfchem package. this way autowrfchem can be found
+    # by the shell when running
     write_dir = os.path.abspath(os.path.join(_pkg_dir, '..'))
 
     with open(submit_template, 'r') as template_obj:

@@ -10,6 +10,7 @@ from .. import common_utils, wrf_date_fmt, _pretty_n_col, config_dir
 from ..configuration import autowrf_classlib as awclib, config_utils, RUNTIME, DO_REINIT, REINIT_FREQ, REINIT_RUN_TIME
 from . import ensembles
 
+import pdb
 
 class WRFRunError(Exception):
     """
@@ -210,12 +211,12 @@ def drive_wrf_execution(ntasks=1, wrf_dir=None, rst=False, require_rst_file=Fals
     return 0
 
 
-def drive_ens_execution(create_config=None, submit=None, ignore_if_done=False, dry_run=False):
+def drive_ens_execution(create_config=None, submit=None, ignore_if_done=False, dry_run=False, overwrite_dirs=False):
 
     if create_config is not None:
         ensembles.create_new_ens_cfg_file(create_config)
     elif submit is not None:
-        ensembles.build_ens_dirs(submit)
+        ensembles.build_ens_dirs(submit, overwrite=overwrite_dirs)
         ensembles.submit_ens_runs(submit, config_utils.AutoWRFChemConfig(), dry_run=dry_run)
 
     return 0
@@ -258,6 +259,8 @@ def setup_ens_clargs(enspar):
     ensgrp.add_argument('-c', '--create-config', help='Create a template config file with the given name')
     ensgrp.add_argument('-s', '--submit', help='Submit the ensemble to run using the given config file')
 
+    enspar.add_argument('-o', '--overwrite-dirs', action='store_true', 
+                        help='Overwrite existing directories when creating ensemble run directories')
     enspar.add_argument('-i', '--ignore-if-done', action='store_true', help='Do not submit a job to run an ensemble '
                                                                             'member that has finished.')
     enspar.add_argument('--dry-run', action='store_true', help='For --submit, do not actually submit the jobs, just'

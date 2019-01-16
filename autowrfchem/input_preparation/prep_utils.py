@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import, division, unicode_literals
 
+from datetime import datetime as dtime, timedelta as tdel
 import os
 import shutil
 
@@ -33,6 +34,7 @@ def run_real_with_reinit(config_obj, log_file=None, **_):
     model_start, model_end = nlc.get_time_period()
 
     n_dom = nlc.wrf_namelist.max_domains
+    start_time = dtime.now()
 
     for reinit_dir, reinit_start_time in common_utils._iter_reinit_dirs(wrf_run_dir, model_start, model_end, reinit_freq):
         print('Preparing input files for {}'.format(reinit_start_time))
@@ -44,5 +46,15 @@ def run_real_with_reinit(config_obj, log_file=None, **_):
         common_utils._prep_reinit_dir(reinit_dir)
         shutil.move(os.path.join(wrf_run_dir, 'wrfbdy_d01'), reinit_dir)
         for dom in range(1, n_dom+1):
-            wrfinput = 'wrfinput_d{:02d}'.format(dom)
-            shutil.move(os.path.join(wrf_run_dir, wrfinput), reinit_dir)
+            for pat in ('wrfinput_d{:02d}', 'wrffdda_d{:02d}'):
+                wrffile = pat.format(dom)
+                wrffile = os.path.join(wrf_run_dir, wrffile)
+                if os.path.isfile(wrffile):
+                    ctime = dtime.fromtimestamp(os.path.getctime(wrffile))
+                    if ctime > start_time:
+                        print('Moving', wrffile)
+                        shutil.move(wrffile, reinit_dir)
+                    else:
+                        print(wrffile, 'is out of date, not moving')
+                else:
+                    print(wrffile, 'does not exist, cannot move')
