@@ -6,7 +6,7 @@ import os
 import shutil
 from subprocess import CalledProcessError
 
-from .. import common_utils, wrf_date_fmt, _pretty_n_col
+from .. import common_utils, wrf_date_fmt, _pretty_n_col, config_dir
 from ..configuration import autowrf_classlib as awclib, config_utils, RUNTIME, DO_REINIT, REINIT_FREQ, REINIT_RUN_TIME
 from . import ensembles
 
@@ -97,7 +97,7 @@ def _run_wrf_once(wrf_dir, ntasks, dry_run=False, config_obj=None):
                                       dry_run=dry_run)
 
 
-def _run_wrf(wrf_dir, ntasks, dry_run=False, config_obj=None):
+def _run_wrf(wrf_dir, ntasks, dry_run=False, config_obj=None, alt_namelist=None):
     if config_obj is None:
         config_obj = config_utils.AutoWRFChemConfig()
 
@@ -107,15 +107,27 @@ def _run_wrf(wrf_dir, ntasks, dry_run=False, config_obj=None):
     reinit_freq = config_utils.get_reinit_freq(config_obj)
     reinit_run_time = config_utils.get_reinit_runtime(config_obj)
 
-    nlc = awclib.NamelistContainer.load_namelists()
-    model_start_time, model_end_time = nlc.get_time_period()
+    if alt_namelist is None:
+        # If not alternate persistent namelist specified, then we use the namelist container to load the default one.
+        # The WrfNamelist class has no method to load the default file defined.
+        nlc = awclib.NamelistContainer.load_namelists()
+
+    else:
+        # If there is an alternate namelist file specified, create a namelist container with it. This loads the standard
+        # registry, which is simpler, but means that if wrf_dir points to a WRF copy using a different registry, it will
+        # be inconsistent. But right now, that problem affects all runs.
+        nlc = awclib.NamelistContainer(wrffile=alt_namelist,
+                                       wpsfile=os.path.join(config_dir, awclib.NamelistContainer.wps_namelist_outfile))
+
+    wrf_nl = nlc.wrf_namelist
+    model_start_time, model_end_time = wrf_nl.get_time_period()
 
     exec_start_time = dtime.now()
 
     for reinit_dir, start_time in common_utils._iter_reinit_dirs(wrf_dir, model_start_time, model_end_time, reinit_freq):
         # Reset the WRF namelist so we only run this time period
-        nlc.set_run_time(reinit_run_time, start_time)
-        nlc.wrf_namelist.write_namelist(os.path.join(wrf_dir, 'namelist.input'))
+        wrf_nl.set_run_time(reinit_run_time, start_time)
+        wrf_nl.write_namelist(os.path.join(wrf_dir, 'namelist.input'))
 
         # Link all the previously prepared input files for this time period to the main run directory
         input_files = glob(os.path.join(reinit_dir, 'wrf*'))
@@ -151,6 +163,13 @@ def _run_wrf(wrf_dir, ntasks, dry_run=False, config_obj=None):
                     shutil.move(out_file, reinit_dir)
 
 
+def _fmt_namelist_path(nl_path, wrf_dir=None, config_obj=None):
+    if wrf_dir is None:
+        wrf_dir = config_utils.get_wrf_run_dir(config_obj)
+
+    return nl_path.format(WRF_DIR=wrf_dir, CFG_DIR=config_dir)
+
+
 def _set_model_run_time(wrf_dir, do_restart, require_rst_file, run_for=None):
     nlc = awclib.NamelistContainer.load_namelists()
     start_date = None
@@ -170,16 +189,17 @@ def _set_model_run_time(wrf_dir, do_restart, require_rst_file, run_for=None):
 
 
 def drive_wrf_execution(ntasks=1, wrf_dir=None, rst=False, require_rst_file=False, run_for=None, no_sync_namelist=False,
-                        dry_run=False):
+                        dry_run=False, alt_namelist=None):
     config_obj = config_utils.AutoWRFChemConfig()
     if wrf_dir is None:
+        # Right now, we don't do anything to make this path relative to the automation directory
         wrf_dir = config_utils.get_wrf_run_dir(config_obj)
 
     try:
         if not no_sync_namelist:
-            awclib.NamelistContainer.clear_temp_changes(config_obj=config_obj)
+            awclib.NamelistContainer.clear_temp_changes(config_obj=config_obj, wrf_dir=wrf_dir)
         _set_model_run_time(wrf_dir, rst, require_rst_file, run_for=run_for)
-        _run_wrf(wrf_dir, ntasks, dry_run=dry_run, config_obj=config_obj)
+        _run_wrf(wrf_dir, ntasks, dry_run=dry_run, config_obj=config_obj, alt_namelist=alt_namelist)
     except (MissingInputFileError, InputDataError) as err:
         common_utils.eprint(str(err), max_columns=_pretty_n_col)
         return 1
@@ -190,7 +210,7 @@ def drive_wrf_execution(ntasks=1, wrf_dir=None, rst=False, require_rst_file=Fals
     return 0
 
 
-def drive_ens_execution(create_config=None, submit=None, dry_run=False):
+def drive_ens_execution(create_config=None, submit=None, ignore_if_done=False, dry_run=False):
 
     if create_config is not None:
         ensembles.create_new_ens_cfg_file(create_config)
@@ -223,16 +243,23 @@ def setup_clargs(parser):
     gengrp.add_argument('--wrf-dir', help='The WRF run directory to execute in. Generally you will set this in the '
                                           'config and can omit this option, but this is here if you need to change '
                                           'the run directory for a single run.')
+    gengrp.add_argument('--alt-namelist', help='An different namelist.input file to use as the persistent namelist '
+                                               'for this run. {WRF_DIR} will be replaced with the WRF run directory '
+                                               'and {CFG_DIR} with the AutoWRFChem CONFIG directory. This option is '
+                                               'mainly intended for use by the ensemble runner.')
     parser.set_defaults(exec_func=drive_wrf_execution)
 
 
 def setup_ens_clargs(enspar):
     enspar.description = 'Set up or run an ensemble with different settings'
 
+    # TODO: make these into subcommands
     ensgrp = enspar.add_mutually_exclusive_group(required=True)
     ensgrp.add_argument('-c', '--create-config', help='Create a template config file with the given name')
     ensgrp.add_argument('-s', '--submit', help='Submit the ensemble to run using the given config file')
 
+    enspar.add_argument('-i', '--ignore-if-done', action='store_true', help='Do not submit a job to run an ensemble '
+                                                                            'member that has finished.')
     enspar.add_argument('--dry-run', action='store_true', help='For --submit, do not actually submit the jobs, just'
                                                                'create the directories and the submit scripts.')
 

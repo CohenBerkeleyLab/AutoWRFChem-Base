@@ -1441,7 +1441,7 @@ class NamelistContainer:
         return cls(wrffile=cls.wrf_namelist_template(config_obj), wpsfile=cls.wps_namelist_template())
 
     @classmethod
-    def clear_temp_changes(cls, config_obj=None):
+    def clear_temp_changes(cls, config_obj=None, wrf_dir=None, wps_dir=None):
         """
         Reset the temporary namelists to match the permanent one
 
@@ -1451,7 +1451,9 @@ class NamelistContainer:
         :return: None
         """
         nlc = cls.load_namelists()
-        nlc.save_namelists(save_mode='temporary', awc_config=config_obj)
+        wrf_dir = config_utils.get_wps_run_dir(config_obj) if wrf_dir is None else wrf_dir
+        wps_dir = config_utils.get_wps_run_dir(config_obj) if wps_dir is None else wps_dir
+        nlc.write_namelists(namelist_dir=wrf_dir, wps_namelist_dir=wps_dir, is_temporary=True)
 
     #########
     # UTILS #

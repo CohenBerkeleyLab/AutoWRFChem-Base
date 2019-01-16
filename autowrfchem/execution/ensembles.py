@@ -94,6 +94,10 @@ def _create_ens_run_dir(dir_path, template_wrf_dir, excludes=(r'met_em.*', r'wrf
         os.symlink(src, dst)
 
 
+def _ens_namelist_file(ens_dir, ens_name):
+    return os.path.join(ens_dir, 'namelist.input.{}'.format(ens_name))
+
+
 def build_ens_dirs(cfg_file):
     cfg = ConfigObj(cfg_file)
     template_wrf_dir = config_utils.get_wrf_run_dir()
@@ -110,10 +114,10 @@ def build_ens_dirs(cfg_file):
         nlc = awclib.NamelistContainer.load_namelists()
         for optname, optval in section.items():
             nlc.wrf_namelist.set_opt_val_no_sect(optname, optval, convert_type_if_needed=True)
-            nlc.wrf_namelist.write_namelist(os.path.join(ens_dir, 'namelist.input'), is_temporary=True)
+        nlc.wrf_namelist.write_namelist(_ens_namelist_file(ens_dir, ens_name))
 
 
-def submit_ens_runs(cfg_file, awc_config, dry_run=False):
+def submit_ens_runs(cfg_file, awc_config, ignore_if_done=True, dry_run=False):
     submit_cmd = awc_config[HPC][SUBMIT_CMD]
     cfg = ConfigObj(cfg_file)
 
@@ -125,6 +129,10 @@ def submit_ens_runs(cfg_file, awc_config, dry_run=False):
 
     with open(submit_template, 'r') as template_obj:
         for idx, (ens_name, ens_dir, _) in enumerate(_iter_ens_members(cfg)):
+            ens_namelist = _ens_namelist_file(ens_dir, ens_name)
+            if ignore_if_done and run_utils.is_wrf_run_complete(ens_dir, ens_namelist):
+                print('{name} in {dir} finished; not submitting'.format(name=ens_name, dir=ens_dir))
+                continue
 
             jobname = '{}-wrf_ens-{}'.format(idx+1, ens_name)
             submit_filename = os.path.join(write_dir, 'submit_' + jobname)
@@ -132,8 +140,8 @@ def submit_ens_runs(cfg_file, awc_config, dry_run=False):
             # ensemble member. Also tell it not to sync the namelist in that ensemble directory with the persistent ones
             # because that would wipe out the ensemble specific settings. We use the Python executable that was used to
             # run this program so that the submit script doesn't need to worry about activating the virtual environment.
-            exec_str = '{py} autowrfchem_main.py run {args} --wrf-dir={dir} --no-sync-namelist'.format(
-                py=sys.executable, args=run_args, dir=ens_dir
+            exec_str = '{py} autowrfchem_main.py run {args} --wrf-dir={dir} --alt-namelist={nlfile}'.format(
+                py=sys.executable, args=run_args, dir=ens_dir, nlfile=ens_namelist
             )
 
             template_obj.seek(0)
