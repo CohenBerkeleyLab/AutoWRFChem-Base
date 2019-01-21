@@ -1,0 +1,353 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Setting up AutoWRFChem &mdash; AutoWRFChem 2.0.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Namelists" href="namelists.html" />
+    <link rel="prev" title="AutoWRFChem Overview" href="../overview.html" /> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> AutoWRFChem
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">User guide sections:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../overview.html">AutoWRFChem Overview</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Setting up AutoWRFChem</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#vanilla-python-3-virtual-environment">Vanilla Python 3 virtual environment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#anaconda-environment">Anaconda environment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#install-with-system-python">Install with system Python</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#first-configuration">First configuration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#environmental-variables">Environmental variables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#automation-variables">Automation variables</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="namelists.html">Namelists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
+</ul>
+<p class="caption"><span class="caption-text">API documentation:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/api_overview.html">API Overview</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">AutoWRFChem</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+      <li>Setting up AutoWRFChem</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/user_guide/setup.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="setting-up-autowrfchem">
+<h1>Setting up AutoWRFChem<a class="headerlink" href="#setting-up-autowrfchem" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h2>
+<p>The recommended way to install AutoWRFChem is inside a Python virtual environment.</p>
+<div class="section" id="vanilla-python-3-virtual-environment">
+<h3>Vanilla Python 3 virtual environment<a class="headerlink" href="#vanilla-python-3-virtual-environment" title="Permalink to this headline">¶</a></h3>
+<p>Create a virtual environment for AutoWRFChem named as such in the current directory:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">venv</span> <span class="n">AutoWRFChem</span>
+<span class="n">cd</span> <span class="n">AutoWRFChem</span>
+</pre></div>
+</div>
+<p>Activate this new virtual environment:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">source</span> <span class="nb">bin</span><span class="o">/</span><span class="n">activate</span>
+</pre></div>
+</div>
+<p>Make sure <strong class="command">pip</strong> is up to date:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">upgrade</span> <span class="n">pip</span>
+</pre></div>
+</div>
+<p>Clone AutoWRFChem (this can be in the virtual environment directory or elsewhere):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">clone</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">CohenBerkeleyLab</span><span class="o">/</span><span class="n">AutoWRFChem</span><span class="o">-</span><span class="n">Base</span><span class="o">.</span><span class="n">git</span>
+<span class="n">cd</span> <span class="n">AutoWRFChem</span><span class="o">-</span><span class="n">Base</span>
+</pre></div>
+</div>
+<p>Run <code class="file docutils literal notranslate"><span class="pre">setup.py</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python3</span> <span class="n">setup</span><span class="o">.</span><span class="n">py</span> <span class="n">install</span>
+</pre></div>
+</div>
+<p>This will install any required dependencies and create the file <code class="file docutils literal notranslate"><span class="pre">awc</span></code> in this directory. That <code class="file docutils literal notranslate"><span class="pre">awc</span></code> file is
+the main executable for AutoWRFChem - it will be configured to run AutoWRFChem with whatever Python executable was
+used to build it, so doing <strong class="command">./awc</strong> in this directory will automatically run it using this virtual environment,
+without you needing to activate it in the future.</p>
+</div>
+<div class="section" id="anaconda-environment">
+<h3>Anaconda environment<a class="headerlink" href="#anaconda-environment" title="Permalink to this headline">¶</a></h3>
+<p>TBD</p>
+</div>
+<div class="section" id="install-with-system-python">
+<h3>Install with system Python<a class="headerlink" href="#install-with-system-python" title="Permalink to this headline">¶</a></h3>
+<p>You <em>may</em> skip the virtual environment and simply install with your system Python 3 if you wish:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">clone</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">CohenBerkeleyLab</span><span class="o">/</span><span class="n">AutoWRFChem</span><span class="o">-</span><span class="n">Base</span><span class="o">.</span><span class="n">git</span>
+<span class="n">cd</span> <span class="n">AutoWRFChem</span><span class="o">-</span><span class="n">Base</span>
+<span class="n">python3</span> <span class="n">setup</span><span class="o">.</span><span class="n">py</span> <span class="n">install</span> <span class="o">--</span><span class="n">user</span>
+</pre></div>
+</div>
+<p>Note the addition of <code class="docutils literal notranslate"><span class="pre">--user</span></code> to the final install command. This will install AutoWRFChem under your user’s package
+library, instead of the main system library which requires root privileges. Generally, installing under the virtual
+environment is preferred since it reduces the possibility of unexpected breakage if system packages are updated, since
+the virtual environment will have its own copy of the required packages.</p>
+</div>
+</div>
+<div class="section" id="first-configuration">
+<h2>First configuration<a class="headerlink" href="#first-configuration" title="Permalink to this headline">¶</a></h2>
+<p>AutoWRFChem does its best to streamline the process of configuring WRF, however some of the setup is unavoidable. When
+you first start AutoWRFChem’s configuration program (<strong class="command">./awc config</strong>), it will check the configuration and give
+you a summary of what needs corrected:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Checking</span> <span class="n">configuration</span><span class="o">...</span>
+  <span class="o">*</span> <span class="n">One</span> <span class="ow">or</span> <span class="n">more</span> <span class="n">environmental</span> <span class="n">variables</span> <span class="n">need</span> <span class="n">fixed</span>
+  <span class="o">*</span> <span class="n">One</span> <span class="ow">or</span> <span class="n">more</span> <span class="n">automation</span> <span class="n">variables</span> <span class="n">need</span> <span class="n">fixed</span>
+</pre></div>
+</div>
+<p>This tells us we need to correct our <a class="reference internal" href="#setupenvvar"><span class="std std-ref">environmental variables</span></a> and at least one of the
+<a class="reference internal" href="#setupcomppaths"><span class="std std-ref">variables that AutoWRFChem itself uses</span></a>.</p>
+<p>The values of these settings that AutoWRFChem will use are store in the config file,
+<code class="file docutils literal notranslate"><span class="pre">CONFIG/autowrfchem.cfg</span></code>. It will be created the first time you run AutoWRFChem and choose to save the config
+changes on exit. You may always edit this file manually if needed to change the values for any of the settings discussed
+below.</p>
+<div class="section" id="environmental-variables">
+<span id="setupenvvar"></span><h3>Environmental variables<a class="headerlink" href="#environmental-variables" title="Permalink to this headline">¶</a></h3>
+<p>WRF used certain <a class="reference internal" href="glossary.html#term-environmental-variables"><span class="xref std std-term">environmental variables</span></a> to define how it should be configured and compiled. These serve two
+distinct purposes:</p>
+<ol class="arabic simple">
+<li>Tell WRF which components to build (i.e. include chemistry or not, which dynamics core to use, etc.)</li>
+<li>Tell WRF where to find certain code libraries it needs (like netCDF)</li>
+</ol>
+<p>From the main menu:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">===</span> <span class="n">AutoWRFChem</span> <span class="o">-</span> <span class="n">Configuration</span> <span class="o">===</span>
+    <span class="mi">1</span><span class="p">:</span> <span class="n">Setup</span> <span class="n">environmental</span> <span class="n">variables</span>
+    <span class="mi">2</span><span class="p">:</span> <span class="n">Setup</span> <span class="n">automation</span> <span class="n">config</span>
+    <span class="mi">3</span><span class="p">:</span> <span class="n">Check</span> <span class="n">configuration</span>
+    <span class="mi">4</span><span class="p">:</span> <span class="n">Run</span> <span class="n">WRF</span><span class="o">/</span><span class="n">WPS</span> <span class="n">config</span> <span class="n">scripts</span>
+    <span class="mi">5</span><span class="p">:</span> <span class="n">Edit</span> <span class="n">namelists</span> <span class="ow">and</span> <span class="n">related</span> <span class="n">config</span> <span class="n">options</span>
+    <span class="mi">6</span><span class="p">:</span> <span class="n">Quit</span>
+</pre></div>
+</div>
+<p>Choose <code class="docutils literal notranslate"><span class="pre">1</span></code> to setup your environmental variables. This will present the following options:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">===</span> <span class="n">Setup</span> <span class="n">environmental</span> <span class="n">variables</span> <span class="o">===</span>
+    <span class="mi">1</span><span class="p">:</span> <span class="n">Choose</span> <span class="n">preset</span>
+    <span class="mi">2</span><span class="p">:</span> <span class="n">Merge</span> <span class="n">shell</span> <span class="n">environmental</span> <span class="nb">vars</span>
+    <span class="mi">3</span><span class="p">:</span> <span class="n">Diagnose</span> <span class="n">problems</span> <span class="k">with</span> <span class="n">env</span><span class="o">.</span> <span class="nb">vars</span>
+    <span class="mi">4</span><span class="p">:</span> <span class="n">Back</span>
+</pre></div>
+</div>
+<p>If this is your first time running AutoWRFChem, you should select option <code class="docutils literal notranslate"><span class="pre">1</span></code>. This will present a list of presets
+that will set all the necessary environmental variables for you. Additionally, there is a help option that will provide
+additional information about the differences between each preset.</p>
+<p>After choosing a preset, or any time AutoWRFChem identifies a problem with your environmental variables, you can choose
+option <code class="docutils literal notranslate"><span class="pre">3</span></code> (“Diagnose problems with env. vars.”) to get more information. For help resolving those issues, see
+<a class="reference internal" href="troubleshooting.html#troubleenvvar"><span class="std std-ref">Environmental variables</span></a> for common troubleshooting advice.</p>
+<p>In most cases, you will not use option <code class="docutils literal notranslate"><span class="pre">2</span></code> (“Merge shell environmental vars”). This will check for relevant
+environmental variables defined in the shell that launched AutoWRFChem and store their current values in the AutoWRFChem
+config file. This is helpful only if you already have these variables setup by default in your shell from
+configuring/compiling WRF or WRF-Chem manually.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">AutoWRFChem doesn’t change the environmental variables in the shell that launched it; instead it just makes sure to
+set the values of all the necessary environmental variables in the shell that’s running any WRF or related external
+program.  This means you don’t have to have those extra variables always defined in your shell, and ensures that the
+same set of environmental variables are set during configuration and compilation.</p>
+</div>
+</div>
+<div class="section" id="automation-variables">
+<span id="setupcomppaths"></span><h3>Automation variables<a class="headerlink" href="#automation-variables" title="Permalink to this headline">¶</a></h3>
+<p>The settings in the AUTOMATION_PATHS section tell AutoWRFChem where to find the various components: WRF, WPS, etc.
+By default, AutoWRFChem assumes it is a sibling directory to these components; that is, the repo directory
+(<code class="file docutils literal notranslate"><span class="pre">AutoWRFChem-Base</span></code>) is in the same directory as the <code class="file docutils literal notranslate"><span class="pre">WRFV3</span></code> and <code class="file docutils literal notranslate"><span class="pre">WPS</span></code> directories. If this is true,
+no extra setup is needed for these paths. If not, but WRFV3, WPS, etc. are all in the same directory, the
+“Setup automation config” option on the main menu will give you the ability to set that directory for all the components
+at once. If the components are in different places, or if the WRF and WPS directories themselves are not named
+“WRFV3” and “WPS”, respectively, then you will need to edit <code class="file docutils literal notranslate"><span class="pre">CONFIG/autowrfchem.cfg</span></code> manually.</p>
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="namelists.html" class="btn btn-neutral float-right" title="Namelists" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../overview.html" class="btn btn-neutral" title="AutoWRFChem Overview" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2019, Joshua Laughner
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../_static/jquery.js"></script>
+        <script type="text/javascript" src="../_static/underscore.js"></script>
+        <script type="text/javascript" src="../_static/doctools.js"></script>
+        <script type="text/javascript" src="../_static/language_data.js"></script>
+    
+
+  
+
+  <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

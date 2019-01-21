@@ -347,8 +347,6 @@ def _run_all_config(pgrm_data):
 config_menu = uib.Menu('AutoWRFChem - Configuration', enter_hook=_check_config_state_hook, exit_hook=_save_config_exit_hook)
 
 env_var_menu = config_menu.add_submenu('Setup environmental variables')
-env_var_menu.attach_custom_fxn('Merge shell environmental vars',
-                               lambda pgrm_data: _merge_environment(pgrm_data[_pgrm_cfg_key], interactive=True))
 
 env_var_preset_menu = env_var_menu.add_submenu('Choose env. var. preset', menu_item_name='Choose preset')
 env_var_preset_menu._auto_exit = True
@@ -361,6 +359,8 @@ for _preset_name, _preset_section in _presets.items():
                                             _set_envvar_preset(pgrm_data[_pgrm_cfg_key], preset, interactive=True))
 env_var_preset_menu.attach_custom_fxn('Help', _env_var_presets_help)
 
+env_var_menu.attach_custom_fxn('Merge shell environmental vars',
+                               lambda pgrm_data: _merge_environment(pgrm_data[_pgrm_cfg_key], interactive=True))
 env_var_menu.attach_custom_fxn('Diagnose problems with env. vars', _diagnose_env_problem)
 
 auto_setup_menu = config_menu.add_submenu('Setup automation config')
