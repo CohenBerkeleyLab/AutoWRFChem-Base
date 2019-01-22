@@ -1291,10 +1291,15 @@ class NamelistContainer:
         if wrffile is None or wpsfile is None:
             raise NamelistReadingError('Must give both a WRF and WPS namelist file')
 
-        if wrf_registry is None:
-            wrf_registry = Registry.load_standard_registry()
-        if wps_registry is None:
-            wps_registry = WPSPseudoRegistry.load_standard_registry()
+        try:
+            if wrf_registry is None:
+                wrf_registry = Registry.load_standard_registry()
+            if wps_registry is None:
+                wps_registry = WPSPseudoRegistry.load_standard_registry()
+        except RegistryIOError:
+            raise NamelistReadingError('Problem loading standard registry for WRF or WPS; cannot init namelist '
+                                       'container. Pass WRF and/or WPS registry object to avoid this error, or '
+                                       'make sure the standard registries can be read.')
 
         self.wrf_namelist = WrfNamelist(wrffile, registry=wrf_registry)
         self.wps_namelist = WpsNamelist(wpsfile, registry=wps_registry)
@@ -2525,7 +2530,10 @@ class Registry(object):
         :raises RegistryIOError: if the registry file does not exist
         """
         config_obj = config_utils.AutoWRFChemConfig()
-        wrf_reg_dir = os.path.join(config_utils.get_wrf_top_dir(config_obj), 'Registry')
+        try:
+            wrf_reg_dir = os.path.join(config_utils.get_wrf_top_dir(config_obj), 'Registry')
+        except config_utils.ComponentMissingError:
+            raise RegistryIOError('WRF directory not configured; cannot load standard registry')
 
         std_reg_file = os.path.join(wrf_reg_dir, 'Registry')
 
@@ -2863,7 +2871,11 @@ class WPSPseudoRegistry(Registry):
         :raises RegistryIOError: if the namelist.wps.all_options file does not exist
         """
         config_obj = config_utils.AutoWRFChemConfig()
-        std_reg_file = os.path.join(config_utils.get_wps_top_dir(config_obj), 'namelist.wps.all_options')
+        try:
+            std_reg_file = os.path.join(config_utils.get_wps_top_dir(config_obj), 'namelist.wps.all_options')
+        except config_utils.ComponentMissingError:
+            raise RegistryIOError('WPS directory not configured; cannot read standard all options WPS namelist')
+
         if not os.path.isfile(std_reg_file):
             raise RegistryIOError('Cannot find standard all options WPS namelist ({})'.format(std_reg_file))
 

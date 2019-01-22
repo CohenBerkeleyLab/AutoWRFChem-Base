@@ -1,0 +1,298 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Troubleshooting &mdash; AutoWRFChem 2.0.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Glossary" href="glossary.html" />
+    <link rel="prev" title="Namelists" href="namelists.html" /> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> AutoWRFChem
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">User guide sections:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../overview.html">AutoWRFChem Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="setup.html">Setting up AutoWRFChem</a></li>
+<li class="toctree-l1"><a class="reference internal" href="namelists.html">Namelists</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Troubleshooting</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#environmental-variables">Environmental variables</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#trouble-setting-netcdf">Trouble setting NETCDF</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#trouble-setting-yacc">Trouble setting YACC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#trouble-setting-flex-lib-dir">Trouble setting FLEX_LIB_DIR</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
+</ul>
+<p class="caption"><span class="caption-text">API documentation:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/api_overview.html">API Overview</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">AutoWRFChem</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+      <li>Troubleshooting</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/user_guide/troubleshooting.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="troubleshooting">
+<h1>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="environmental-variables">
+<span id="troubleenvvar"></span><h2>Environmental variables<a class="headerlink" href="#environmental-variables" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="trouble-setting-netcdf">
+<h3>Trouble setting NETCDF<a class="headerlink" href="#trouble-setting-netcdf" title="Permalink to this headline">¶</a></h3>
+<p><strong>Why is the NETCDF variable necessary?</strong> WRF relies on the netCDF library to read and write its input and output files.
+During compilation, WRF needs to know where that library is so that it can include the code from the library in its own
+executable. It’s important to note that the netCDF library itself is written in C, and has a Fortran interface. WRF
+needs both parts, it uses the Fortran interface to talk to the C core that does the actual reading/writing.</p>
+<p><strong>What does AutoWRFChem do to try and find it?</strong> When you select a set of present environmental variables, AutoWRFChem
+tries several things to find the netCDF library:</p>
+<ol class="arabic simple">
+<li><em>Looks for any :term:`environmental variable` with “NETCDF” in its name.</em> Sometimes computing clusters will define
+something like this for you when you load the netCDF libraries. In this case, all AutoWRFChem has to do is point the
+<code class="docutils literal notranslate"><span class="pre">NETCDF</span></code> variable that WRF expects to that path.</li>
+<li><em>Tries to run the nc-config and nf-config programs.</em> These are programs installed with the libraries that provide
+information about how the libraries are configured, including where they are installed. AutoWRFChem will use these
+to try to find out where the libraries are installed, and, if successful, use that path.</li>
+</ol>
+<p><strong>AutoWRFChem is listing a lot of NETCDF versions/My compute cluster has more than one version of the library installed. Which one do I choose?</strong>
+Generally, pick the highest version one <em>compiled with the same version of the compiler you will use to compile WRF</em>.
+Trying to mix version of libraries compiled with different versions of a compile can end badly (usually compilation won’t
+succeed).</p>
+<p><strong>AutoWRFChem says that the Fortran and C netCDF libraries are in different places.</strong> As far as I can tell, WRF expects
+the install location for both the C and Fortran libraries to be the same, that is, <strong class="command">nc-config --prefix</strong> and
+<strong class="command">nf-config --prefix</strong> should return the same path, which will contain subdirectories <code class="file docutils literal notranslate"><span class="pre">lib</span></code> and
+<code class="file docutils literal notranslate"><span class="pre">include</span></code>. If your C and Fortran netCDF libraries are in different places, the easiest fix is to link both
+libraries’ files to one directory:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span># Assume $NCDIR is the directory containing lib and include subdirectories for C-netCDF
+# Assume $NFDIR is the same for Fortran-NETCDF
+# Lastly, $LINKDIR is the directory we&#39;ll use to make the links
+# This is all in the terminal
+cd $LINKDIR
+mkdir lib include
+cd lib
+ln -sv &quot;$NCDIR/lib/&quot;* .
+ln -sv &quot;$NFDIR/lib/&quot;* .
+cd ../include
+ln -sv &quot;$NCDIR/include/&quot;* .
+ln -sv &quot;$NFDIR/include/&quot;* .
+</pre></div>
+</div>
+<p><strong>My cluster doesn’t have netCDF available.</strong> You’ll have to either build it yourself (not fun) or ask the admins of
+your cluster to install it. It’s used in enough scientific applications that it’s worth it to get installed.</p>
+</div>
+<div class="section" id="trouble-setting-yacc">
+<h3>Trouble setting YACC<a class="headerlink" href="#trouble-setting-yacc" title="Permalink to this headline">¶</a></h3>
+<p>YACC is a lexer program that is used by the kinetic preprocessor to generate Fortran code from simple chemical mechanism
+input files. Many linux systems will have it installed by default at <code class="file docutils literal notranslate"><span class="pre">/bin</span></code> or <code class="file docutils literal notranslate"><span class="pre">/usr/bin</span></code>. AutoWRFChem
+searches the likely places; if it can’t find it, it may not be installed. Check that:</p>
+<ol class="arabic simple">
+<li>if your cluster uses module files to load different programs or libraries into your shell that YACC is not loaded by
+that mechanism.</li>
+<li>ask the cluster admins if YACC is already installed in a non-standard place.</li>
+</ol>
+<p>Note that the original YACC has been superseded by <cite>GNU Bison &lt;https://savannah.gnu.org/projects/bison/&gt;_</cite> in many
+cases.</p>
+<p>If not, the options are the same as for netCDF: build it yourself (<cite>GNU Bison</cite> &lt;<a class="reference external" href="https://savannah.gnu.org/projects/bison/">https://savannah.gnu.org/projects/bison/</a>&gt;_`
+is probably your best bet, though I have never tried it myself) or ask the cluster admins to add it.</p>
+</div>
+<div class="section" id="trouble-setting-flex-lib-dir">
+<h3>Trouble setting FLEX_LIB_DIR<a class="headerlink" href="#trouble-setting-flex-lib-dir" title="Permalink to this headline">¶</a></h3>
+<p>The FLEX library is also used by the kinetic preprocessor. The specific file you are looking for is <code class="file docutils literal notranslate"><span class="pre">libfl.a</span></code>.
+AutoWRFChem searches the standard places for it (<code class="file docutils literal notranslate"><span class="pre">/usr/lib</span></code> and <code class="file docutils literal notranslate"><span class="pre">/usr/lib64</span></code>), so if it can’t find it, it’s
+not installed in a usual place. As with YACC:</p>
+<ol class="arabic simple">
+<li>check if the FLEX library is available as a module on your cluster that needs loaded</li>
+<li>ask the cluster admins if it is installed in a non-standard place</li>
+<li>either ask the admins to install it or build it yourself (<a class="reference external" href="https://github.com/westes/flex">https://github.com/westes/flex</a>).</li>
+</ol>
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="glossary.html" class="btn btn-neutral float-right" title="Glossary" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="namelists.html" class="btn btn-neutral" title="Namelists" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2019, Joshua Laughner
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../_static/jquery.js"></script>
+        <script type="text/javascript" src="../_static/underscore.js"></script>
+        <script type="text/javascript" src="../_static/doctools.js"></script>
+        <script type="text/javascript" src="../_static/language_data.js"></script>
+    
+
+  
+
+  <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
