@@ -138,6 +138,7 @@ def _save_namelists(pgrm_data):
     elif action == save_later:
         _save_namelists_for_later(nlc)
     elif action == discard:
+        # TODO: revert changes in memory as well
         return True
     elif action == cancel:
         return False

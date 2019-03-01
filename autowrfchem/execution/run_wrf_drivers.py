@@ -130,6 +130,10 @@ def _run_wrf(wrf_dir, ntasks, dry_run=False, config_obj=None, alt_namelist=None)
         wrf_nl.set_run_time(reinit_run_time, start_time)
         wrf_nl.write_namelist(os.path.join(wrf_dir, 'namelist.input'))
 
+        if not dry_run:
+            print('Deleting previous wrfout files in {}'.format(reinit_dir))
+            common_utils.rmfiles(os.path.join(reinit_dir, 'wrfout*'))
+
         # Link all the previously prepared input files for this time period to the main run directory
         input_files = glob(os.path.join(reinit_dir, 'wrf*'))
         for input_file in input_files:
@@ -145,6 +149,7 @@ def _run_wrf(wrf_dir, ntasks, dry_run=False, config_obj=None, alt_namelist=None)
                     os.remove(input_file_link)
 
                 # input_file should be an absolute path, so this shouldn't pose a problem
+                print('Linking {} -> {}'.format(input_file, input_file_link))
                 os.symlink(input_file, input_file_link)
             else:
                 print('Would link {0} -> {1}, overwriting the first if needed'.format(input_file_link, input_file))
