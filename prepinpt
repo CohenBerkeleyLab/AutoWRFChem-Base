@@ -187,6 +187,7 @@ if $metonly; then
         if [ $wpsexit -eq 0 ]; then
             echo "Running real.exe since only the meterology has been requested."
             cd ../WRFV3/run
+            python $pyprog tempmod --emiss_opt=0 --bio_emiss_opt=0 --restart=.false.
             ./real.exe
             realexit=$?
             if [ $realexit -eq 0 ]; then
