@@ -6,6 +6,11 @@ import autowrf_classlib as WRF
 from autowrf_classlib import UI
 import pdb
 
+
+if sys.version_info.major == 3:
+    raw_input = input
+
+
 def MyPath():
     return os.path.dirname(os.path.abspath(__file__))
 

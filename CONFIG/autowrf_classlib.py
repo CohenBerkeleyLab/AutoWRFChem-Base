@@ -5,8 +5,14 @@ from collections import OrderedDict
 import pickle
 import os
 from glob import glob
+import sys
 import pdb
 import autowrf_consts as awc
+
+
+if sys.version_info.major == 3:
+    raw_input = input
+
 
 DEBUG_LEVEL=1
 
@@ -1188,7 +1194,7 @@ class UI:
             # Take advantage of datetime's built in checking to be sure we have a valid date
             try:
                 dateout = dt.datetime(yr,mn,dy,hour,min,sec)
-            except ValueError, e:
+            except ValueError as e:
                 print("Problem with date/time entered: {0}".format(str(e)))
                 continue
 
